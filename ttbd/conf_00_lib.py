@@ -2729,7 +2729,6 @@ class tt_qemu_linux(ttbl.tt_qemu.tt_qemu):
  -enable-kvm
  -bios %(qemu_bios_image)s
  -m %(ram_megs)d
- -vga none -nographic
  -usb
  -chardev socket,id=ttyS0,server,nowait,path=%(path)s/%(bsp)s-console.write,logfile=%(path)s/%(bsp)s-console.read
  -serial chardev:ttyS0

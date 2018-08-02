@@ -2,6 +2,23 @@
 #
 # FIXME: this is an experiment and it is not yet complete
 #
+# RPM dependencies:
+#
+# - tftp: set configs to dir upthere, indicate service is needed started, open firewall
+#   need perms to create /var/lib/tftpboot/ttbd-staging as ttbd:nobody
+# - dhcpd: service not started, we do our own config, open firewall
+# - httpd: service started, figure out where to put it
+# - nfs: server started, fixme how to place images?
+# - syslinux: 
+# - https server to serve images, it is way faster than tftp
+#
+# - nfs server serving images for service domain, easier than trusting
+#   the local setup
+#
+# - will use properties as source of things needed to boot
+# - set
+# - QEMU not netbooting
+#
 
 import os
 import pwd
@@ -11,6 +28,13 @@ import subprocess
 
 import commonl
 import ttbl
+
+# FIXME: config setting ttbd-staging
+tftp_prefix = "ttbd-staging"
+# FIXME config setting
+tftp_dir = "/var/lib/tftpboot"
+# FIXME config setting
+syslinux_path = "/usr/share/syslinux"
 
 class pci(ttbl.tt_power_control_impl):
 
@@ -81,6 +105,7 @@ class pci(ttbl.tt_power_control_impl):
 
         # FIXME: move to power_on_do, to get this info from target's tags
         self._params = dict(
+            tftp_prefix = tftp_prefix,
             if_net = if_net,
             if_addr = if_addr,
             if_netmask = if_netmask,
@@ -116,6 +141,7 @@ option architecture-type code 93 = unsigned integer 16;
             self.log.info("%s: IPv4 net/mask %s/%s",
                           self._params['if_name'], self._params['if_net'],
                           self._params['if_netmask'])
+            # FIXME: make it so using pxelinux is a configuratio template (likewise on the tftp side, so we can swithc to EFI boot or whatever we want)
             f.write("""\
 subnet %(if_net)s netmask %(if_netmask)s {
         pool {
@@ -126,7 +152,7 @@ subnet %(if_net)s netmask %(if_netmask)s {
                 match if substring (option vendor-class-identifier, 0, 9) = "PXEClient";
                 # http://www.syslinux.org/wiki/index.php?title=PXELINUX#UEFI
                 if option architecture-type = 00:00 {
-                        filename "pxelinux.0";
+                        filename "%(tftp_prefix)s/lpxelinux.0";
                 } elsif option architecture-type = 00:09 {
 #                        filename "pxe/grubx64.efi";
                         filename  "boot/grub2/x86_64-efi/core.efi";
@@ -136,7 +162,7 @@ subnet %(if_net)s netmask %(if_netmask)s {
                 } elsif option architecture-type = 00:06 {
                         filename "pxe/syslinux-ia32.efi";
                 } else {
-                        filename "pxe/pxelinux.0";
+                        filename "%(tftp_prefix)s/lpxelinux.0";
                 }
                 # Point to the TFTP server, which is the same as this
                 next-server %(if_addr)s;
@@ -200,105 +226,13 @@ host host-%s {
         ttbl.daemon_pid_add(pid)	# FIXME: race condition if it died?
 
 
-    def _tftpd_conf_write(self):
-        _kws = dict(default_entry = 'localboot')
-        # FIXME: how do we distinguish non-linux machines?
-        # Write PXE linux configuration
-        # This is for all units
-        pxe_config_default = os.path.join(self.pxe_dir, "pxelinux.cfg/default")
-        with open(pxe_config_default, "wb") as f:
-            os.chmod(f.name, stat.S_IRUSR | stat.S_IRGRP | stat.S_IROTH)
-            f.write("""\
-say TCF Network bootloader
-#default %(default_entry)s
-timeout 100
-prompt 0
-totaltimeout 1000
-""" % _kws)
-            for _mac_addr, mac_data in self._mac_ip_map.iteritems():
-                for image_name, image_data in mac_data.iteritems():
-                    # FIXME: this needs definition, now it is too wild
-                    if not isinstance(image_data, dict):
-                        continue
-                    kws = dict(_kws)
-                    kws['name'] = image_name
-                    kws['append'] = image_data.get('append', "")
-                    f.write("""\
-label %(name)s
-""" % kws)
-                    if 'kernel' in image_data:
-                        fname = image_data['kernel']
-                        shutil.copy(fname, self.pxe_dir)
-                        f.write("""\
-    kernel %s
-""" % os.path.basename(image_data['kernel']))
-                    elif 'linux' in image_data:
-                        f.write("""\
-    linux %s
-""" % image_data['linux'])
-                        if 'initrd' in image_data:
-                            # FIXME: copy initrd to self.pxedir/NAME/BASENAME
-                            kws['initrd'] = os.path.basename(image_data['initrd'])
-                            f.write("""\
-    append rw %(name)s/%(bzImage)s root=/dev/ram0 %(append)s
-""" % kws)
-                        else:
-                            f.write("""\
-    append rw %(append)s
-""" % kws)
-
-                # FIXME: what was this for? I forgot
-            f.write("""\
-label localboot
-    localboot 0xffff
-""")
-
-    def _tftpd_start(self):
-        # install stuff we need
-        shutil.copy("/usr/share/syslinux/pxelinux.0", self.pxe_dir)
-        shutil.copy("/usr/share/syslinux/ldlinux.c32", self.pxe_dir)
-        args = [
-            #"strace", "-f", "-s2048", "-o/tmp/tftpd.log",
-            "in.tftpd",
-            "--foreground",
-            "--secure",
-            "--address", self._params['if_addr'],
-            "--verbosity", "4",
-            # Ensure we run as us, otherwise it tries to go nobody
-            "--user", pwd.getpwuid(os.getuid()).pw_name,
-            "--pid", self.tftpd_pidfile,
-            self.pxe_dir,
-        ]
-        try:
-            so = open(os.path.join(self.state_dir, "tftpd.log"), "wb+")
-            subprocess.Popen(args,
-                             shell = False, cwd = self.pxe_dir,
-                             close_fds = True,
-                             stdout = so, stderr = subprocess.STDOUT)
-        except OSError as e:
-            raise self.tftpd_start_e("TFTPD failed to start: %s", e)
-        pid = commonl.process_started(
-            self.tftpd_pidfile, self.tftpd_path,
-            verification_f = os.path.exists,
-            verification_f_args = (self.tftpd_pidfile,),
-            tag = "tftpd", log = self.log)
-        # systemd might complain with
-        #
-        # Supervising process PID which is not our child. We'll most
-        # likely not notice when it exits.
-        #
-        # Can be ignored
-        if pid == None:
-            raise self.tftpd_start_e("tftpd failed to start")
-        ttbl.daemon_pid_add(pid)	# FIXME: race condition if it died?
-
     def _init_for_process(self, target):
         # These are the entry points we always need to initialize, we
         # might be in a different process
         if self.log == None:
             self.log = target.log
             self.state_dir = os.path.join(target.state_dir, "dhcpd")
-            self.pxe_dir = os.path.join(self.state_dir, "pxelinux")
+            self.pxe_dir = os.path.join(tftp_dir, tftp_prefix)
             self.dhcpd_pidfile = os.path.join(self.state_dir, "dhcpd.pid")
             self.tftpd_pidfile = os.path.join(self.state_dir, "tftpd.pid")
 
@@ -313,7 +247,12 @@ label localboot
         # Create runtime directory where we place everything
         shutil.rmtree(self.state_dir, ignore_errors = True)
         os.makedirs(self.state_dir)
+        # TFTP setup
+        shutil.rmtree(os.path.join(self.pxe_dir, "pxelinux.cfg"), ignore_errors = True)
         os.makedirs(os.path.join(self.pxe_dir, "pxelinux.cfg"))
+        os.chmod(os.path.join(self.pxe_dir, "pxelinux.cfg"), 0o0775)
+        shutil.copy(os.path.join(syslinux_path, "lpxelinux.0"), self.pxe_dir)
+        shutil.copy(os.path.join(syslinux_path, "ldlinux.c32"), self.pxe_dir)
 
         # We set the parameters in a dictionary so we can use it to
         # format strings
@@ -323,7 +262,6 @@ label localboot
         # FIXME: if we get the parameters from the network here, we
         # have target -- so we don't need to set them on init
         self._dhcp_conf_write()
-        self._tftpd_conf_write()
 
         # FIXME: before start, filter out leases file, anything in the
         # leases dhcpd.leases file that has a "binding state active"
@@ -332,35 +270,89 @@ label localboot
         # FIXME: rm old leases file, overwrite with filtered one
 
         self._dhcpd_start()
-        try:
-            self._tftpd_start()
-        except self.error_e:
-            commonl.process_terminate(self.dhcpd_pidfile,
-                                      path = self.dhcpd_path, tag = "dhcpd")
-            raise
 
     def power_off_do(self, target):
         self._init_for_process(target)
         commonl.process_terminate(self.dhcpd_pidfile,
                                   path = self.dhcpd_path, tag = "dhcpd")
-        commonl.process_terminate(self.dhcpd_pidfile,
-                                  path = self.tftpd_path, tag = "tftpd")
 
     def power_get_do(self, target):
         self._init_for_process(target)
         dhcpd_pid = commonl.process_alive(self.dhcpd_pidfile, self.dhcpd_path)
-        tftpd_pid = commonl.process_alive(self.tftpd_pidfile, self.tftpd_path)
-        if dhcpd_pid != None and tftpd_pid != None:
+        if dhcpd_pid != None:
             return True
-        elif dhcpd_pid == None and tftpd_pid == None:
-            return False
         else:
-            self.log.warning("Inconstent PIDs DHCPD %s TFTP %s: stopping\n",
-                             dhcpd_pid, tftpd_pid)
-            if dhcpd_pid:
-                commonl.process_terminate(dhcpd_pid, self.dhcpd_pidfile,
-                                          "dhcpd[%d]" % dhcpd_pid)
-            if tftpd_pid:
-                commonl.process_terminate(tftpd_pid, self.tftpd_pidfile,
-                                          "tftpd[%d]" % tftpd_pid)
             return False
+
+
+def tftp_service_domain_os_power_on_pre(target):
+    """
+    We are called before power on
+    
+    We will write a TFTP configuration file for the mac
+    """
+
+    mac_addr = target.tags['interconnects']['nwa']['mac_addr']
+    file_name = os.path.join(tftp_dir, tftp_prefix, "pxelinux.cfg",
+                             # FIXME: 01-, where does it come from
+                             "01-" + mac_addr.replace(":", "-"))
+
+    # The service
+    kws = dict(
+        # FIXME: ttbd server's IP address in nwa
+        #http_url_prefix = "http://192.168.97.1/~inaky/",	# FIXME: booting over TFTP
+        http_url_prefix = "",
+        nfs_server = "192.168.97.1",				# FIXME
+        nfs_path = "/home/images/tcf-live",			# FIXME
+        ipv4_addr = target.tags['interconnects']['nwa']['ipv4_addr'],
+        #target_ipv4_gateway = target.tags['interconnects']['nwa']['something']
+        ipv4_gateway = "192.168.97.1",	# FIXME
+        # FIXME compute from addr_len
+        ipv4_netmask = "255.255.255.0",
+        name = target.id,
+    )
+    
+    with open(file_name, "w") as tf:
+        tf.write("""
+say TCF Network boot
+serial 0 115200
+default boot
+prompt 0
+label boot
+  # boot to service OS / tcf-live
+  linux %(http_url_prefix)svmlinuz-tcf-live
+  append initrd=%(http_url_prefix)sinitramfs-tcf-live \
+console=ttyS0 console=ttyUSB0 console=tty0 \
+        ip=%(ipv4_addr)s::%(ipv4_gateway)s:%(ipv4_netmask)s:%(name)s::off:%(ipv4_gateway)s \
+root=/dev/nfs nfsroot=%(nfs_server)s:%(nfs_path)s \
+rd.live.image selinux=0 audit=0
+""" % kws)
+        tf.flush()
+        # We know the file exists
+        os.chmod(tf.name, 0o644)
+
+#<client-ip>:<server-ip>:<gw-ip>:<netmask>:<hostname>:<device>:<autoconf>:<dns0-ip>:<dns1-ip>:<ntp0-ip>
+
+def power_on_pre_tftp_domain_switch(target):
+
+    # FIXME
+    #
+    # - tftp_boot_domain would be set as a property from the client to
+    #   decide what tftp_boot_domain to boot we can also use
+    #   properties to decide which vmlinuz/initrd and other boot
+    #   options to set (cmdline?)
+    #
+    # - set in tags which interconnect is used for booting?
+    #
+    # - initialize keywords from interconnect, target, then properties
+    #
+    # - use the kws to initialize files and stuff
+    #
+    # - we need a name for this mechanism
+    
+    kws = {}
+    domain = target.fsdb.get("tftp_boot_domain")
+    if domain == None:
+        return
+
+    
