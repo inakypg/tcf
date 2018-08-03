@@ -285,33 +285,17 @@ host host-%s {
             return False
 
 
-def tftp_service_domain_os_power_on_pre(target):
+def tftp_service_domain_os_power_on_pre(target, kws):
     """
     We are called before power on
     
     We will write a TFTP configuration file for the mac
     """
 
-    mac_addr = target.tags['interconnects']['nwa']['mac_addr']
+    mac_addr = kws['mac_addr']
     file_name = os.path.join(tftp_dir, tftp_prefix, "pxelinux.cfg",
                              # FIXME: 01-, where does it come from
                              "01-" + mac_addr.replace(":", "-"))
-
-    # The service
-    kws = dict(
-        # FIXME: ttbd server's IP address in nwa
-        #http_url_prefix = "http://192.168.97.1/~inaky/",	# FIXME: booting over TFTP
-        http_url_prefix = "",
-        nfs_server = "192.168.97.1",				# FIXME
-        nfs_path = "/home/images/tcf-live",			# FIXME
-        ipv4_addr = target.tags['interconnects']['nwa']['ipv4_addr'],
-        #target_ipv4_gateway = target.tags['interconnects']['nwa']['something']
-        ipv4_gateway = "192.168.97.1",	# FIXME
-        # FIXME compute from addr_len
-        ipv4_netmask = "255.255.255.0",
-        name = target.id,
-    )
-    
     with open(file_name, "w") as tf:
         tf.write("""
 say TCF Network boot
@@ -328,12 +312,12 @@ root=/dev/nfs nfsroot=%(nfs_server)s:%(nfs_path)s \
 rd.live.image selinux=0 audit=0
 """ % kws)
         tf.flush()
-        # We know the file exists
+        # We know the file exists, so it is safe to chmod like this
         os.chmod(tf.name, 0o644)
 
 #<client-ip>:<server-ip>:<gw-ip>:<netmask>:<hostname>:<device>:<autoconf>:<dns0-ip>:<dns1-ip>:<ntp0-ip>
 
-def power_on_pre_tftp_domain_switch(target):
+def power_on_pre_boot_domain_setup(target):
 
     # FIXME
     #
@@ -351,8 +335,41 @@ def power_on_pre_tftp_domain_switch(target):
     # - we need a name for this mechanism
     
     kws = {}
-    domain = target.fsdb.get("tftp_boot_domain")
+    domain = target.fsdb.get("boot_domain")
     if domain == None:
-        return
+        # Not out deal, we don't know what to do, why are we here again?
+        raise RuntimeError('Can\'t select domain to boot due to missing '
+                           '"boot_domain" property')
 
+    boot_ic = target.tags.get('boot_interconnect', None)
+    if boot_ic == None:
+        raise RuntimeError('no "boot_interconnect" tag/property defined, '
+                           'can\'t boot off network')
+    if not boot_ic in target.tags['interconnects']:
+        raise RuntimeError('this target does not belong to the '
+                           'boot interconnect "%s" defined in tag '
+                           '"boot_interconnect"' % boot_ic)
     
+    interconnect = target.tags['interconnects'][boot_ic]
+    mac_addr = interconnect['mac_addr']
+    
+    # The service
+    kws = dict(
+        boot_domain = domain,
+        # FIXME: ttbd server's IP address in nwa
+        #http_url_prefix = "http://192.168.97.1/~inaky/",	# FIXME: booting over TFTP
+        http_url_prefix = "",
+        nfs_server = "192.168.97.1",				# FIXME
+        nfs_path = "/home/images/tcf-live",			# FIXME
+        ipv4_addr = interconnect['ipv4_addr'],
+        #target_ipv4_gateway = interconnect['something']
+        ipv4_gateway = "192.168.97.1",	# FIXME
+        # FIXME compute from addr_len
+        ipv4_netmask = "255.255.255.0",
+        mac_addr = interconnect['mac_addr'],
+        name = target.id,
+    )
+    
+    if domain == 'service':
+        target.log.info("next boot will go to service domain")
+        tftp_service_domain_os_power_on_pre(target, kws)
