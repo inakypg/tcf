@@ -16,9 +16,21 @@
 #   the local setup
 #
 # - will use properties as source of things needed to boot
+#
 # - set
+#
 # - QEMU not netbooting
 #
+# - support no initramfs, no ip setting?
+#
+# - local boot has to be implemeted with !syslinux, so syslinux
+#   chainloads grub or whatever. Reason? that way we make sure there
+#   is a local way to boot the system.
+#
+# - we also want to use tftp as the swithcing mechanism as it doesn't
+#   need to reload config files (DHCPD does)--so it is easy to switch
+#   state.
+
 
 import os
 import pwd
@@ -110,7 +122,7 @@ class pci(ttbl.tt_power_control_impl):
             if_addr = if_addr,
             if_netmask = if_netmask,
             ip_addr_range_bottom = ip_addr_range_bottom,
-            ip_addr_range_top = ip_addr_range_top
+            ip_addr_range_top = ip_addr_range_top,
         )
         if allow_unmapped:
             self._params["allow_known_clients"] = "allow known clients;"
@@ -138,6 +150,7 @@ option pxelinux.reboottime code 211 = unsigned integer 32;
 option architecture-type code 93 = unsigned integer 16;
 
 """)
+            # generate the ipv4 part
             self.log.info("%s: IPv4 net/mask %s/%s",
                           self._params['if_name'], self._params['if_net'],
                           self._params['if_netmask'])
@@ -180,6 +193,38 @@ host host-%s {
         fixed-address %s;
 }
 """ % (mac.replace(":", "-"), mac, ipv4_addr))
+
+    if False:
+        #
+        # FIXME: we need to fire a whole new DHCP daemon with -6 -- they
+        # don't coexist
+        #
+        # First fold if_netmask into if_len and generate netsmask from
+        # there
+        # def ipv4_len_to_netmask_ascii(len)
+        #    return socket.inet_ntoa(struct.pack('>I', 0xffffffff ^ ((1 << (32 - len) ) - 1)))
+
+
+                    # generate the ipv6 part
+                    self.log.info("%s: IPv6 net/mask %s/%s",
+                                  self._params['if_name'], self._params['if_net'],
+                                  self._params['if_netmask'])
+                    f.write("""\
+        subnet6 %(if6_net)s/ %(if6_len)s {
+                range6 %(ip6_addr_range_bottom)s  %(ip6_addr_range_top)s;
+        """ % self._params)
+                    for mac, mac_data in self._mac_ip_map.iteritems():
+                        ipv6_addr = mac_data.get('ipv6_addr', None)
+                        if ipv6_addr:
+                            f.write("""\
+                host host-%s {
+                        hardware ethernet %s;
+                        fixed-address6 %s;
+                }
+        """ % (mac.replace(":", "-"), mac, ipv6_addr))
+                    f.write("""\
+        }
+        """)
 
 
 
@@ -292,30 +337,6 @@ def tftp_service_domain_os_power_on_pre(target, kws):
     We will write a TFTP configuration file for the mac
     """
 
-    mac_addr = kws['mac_addr']
-    file_name = os.path.join(tftp_dir, tftp_prefix, "pxelinux.cfg",
-                             # FIXME: 01-, where does it come from
-                             "01-" + mac_addr.replace(":", "-"))
-    with open(file_name, "w") as tf:
-        tf.write("""
-say TCF Network boot
-serial 0 115200
-default boot
-prompt 0
-label boot
-  # boot to service OS / tcf-live
-  linux %(http_url_prefix)svmlinuz-tcf-live
-  append initrd=%(http_url_prefix)sinitramfs-tcf-live \
-console=ttyS0 console=ttyUSB0 console=tty0 \
-        ip=%(ipv4_addr)s::%(ipv4_gateway)s:%(ipv4_netmask)s:%(name)s::off:%(ipv4_gateway)s \
-root=/dev/nfs nfsroot=%(nfs_server)s:%(nfs_path)s \
-rd.live.image selinux=0 audit=0
-""" % kws)
-        tf.flush()
-        # We know the file exists, so it is safe to chmod like this
-        os.chmod(tf.name, 0o644)
-
-#<client-ip>:<server-ip>:<gw-ip>:<netmask>:<hostname>:<device>:<autoconf>:<dns0-ip>:<dns1-ip>:<ntp0-ip>
 
 def power_on_pre_boot_domain_setup(target):
 
@@ -352,15 +373,11 @@ def power_on_pre_boot_domain_setup(target):
     
     interconnect = target.tags['interconnects'][boot_ic]
     mac_addr = interconnect['mac_addr']
-    
+
     # The service
     kws = dict(
-        boot_domain = domain,
         # FIXME: ttbd server's IP address in nwa
-        #http_url_prefix = "http://192.168.97.1/~inaky/",	# FIXME: booting over TFTP
-        http_url_prefix = "",
-        nfs_server = "192.168.97.1",				# FIXME
-        nfs_path = "/home/images/tcf-live",			# FIXME
+        http_url_prefix = "http://192.168.97.1/~inaky/",	# FIXME: booting over TFTP
         ipv4_addr = interconnect['ipv4_addr'],
         #target_ipv4_gateway = interconnect['something']
         ipv4_gateway = "192.168.97.1",	# FIXME
@@ -368,8 +385,67 @@ def power_on_pre_boot_domain_setup(target):
         ipv4_netmask = "255.255.255.0",
         mac_addr = interconnect['mac_addr'],
         name = target.id,
+        nfs_server = "192.168.97.1",				# FIXME
+        nfs_path = "/home/images/tcf-live",			# FIXME,
     )
-    
+
+    kws['extra_kopts'] = ""
     if domain == 'service':
-        target.log.info("next boot will go to service domain")
-        tftp_service_domain_os_power_on_pre(target, kws)
+        kws['boot_domain'] = 'tcf-live'
+        kws['root_dev'] = '/dev/nfs'
+        kws['extra_kopts'] += "initrd=%(http_url_prefix)sinitramfs-%(boot_domain)s " \
+                              "nfsroot=%(nfs_server)s:%(nfs_path)s rd.live.image selinux=0 audit=0"
+    else:
+        kws['boot_domain'] = domain
+        kws['root_dev'] = target.property_get("", "boot_domain_root_dev", "")
+        kws['extra_kopts'] += target.property_get("", "boot_domain_extra_kopts", "")
+    
+    mac_addr = kws['mac_addr']
+    file_name = os.path.join(tftp_dir, tftp_prefix, "pxelinux.cfg",
+                             # FIXME: 01- is the ARP type 1 for ethernet
+                             "01-" + mac_addr.replace(":", "-"))
+
+    # note the syslinux/pxelinux format supports no long line
+    # breakage, so we use Python's \ for clearer, shorter lines which
+    # will be pasted all together
+
+    # FIXME: move somewhere else more central?
+    #
+    # IP specification is needed so the kernel acquires an IP address
+    # and can syslog/nfsmount, etc Note we know the fields from the
+    # target's configuration, as they are pre-assigned
+    #
+    # <client-ip>:<server-ip>:<gw-ip>:<netmask>:<hostname>:<device>:<autoconf>:<dns0-ip>:<dns1-ip>:<ntp0-ip>
+    config = """\
+say TCF Network boot
+serial 0 115200
+default boot
+prompt 0
+label boot
+  # boot to %(boot_domain)s
+  linux %(http_url_prefix)svmlinuz-%(boot_domain)s
+  append console=ttyS0 console=ttyUSB0 console=tty0 \
+    ip=%(ipv4_addr)s::%(ipv4_gateway)s:%(ipv4_netmask)s:%(name)s::off:%(ipv4_gateway)s \
+    root=%(root_dev)s %(extra_kopts)s
+"""
+    # FIXME:
+    #
+    # if there are substitution fields in the config text,
+    # replace them with the keywords; repeat until there are none left
+    # (as some of the keywords might bring in new substitution keys).
+    #
+    # Stop after ten iterations
+    count = 0
+    while '%(' in config:
+        config = config % kws
+        count += 1
+        if count > 9:
+            raise RuntimeError('after ten iterations could not resolve '
+                               'all configuration keywords')
+    
+    with open(file_name, "w") as tf:
+        tf.write(config)
+        tf.flush()
+        # We know the file exists, so it is safe to chmod like this
+        os.chmod(tf.name, 0o644)
+
