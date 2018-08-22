@@ -206,7 +206,7 @@ host host-%s {
     def _dhcp_conf_write_ipv6(self, f):
         # generate the ipv6 part -- we only use it to assign
         # addresses; PXE is done only over ipv4
-        self.log.info("%(if_name)s: IPv6 net/len %(if_addr)/%(if_len)s" %
+        self.log.info("%(if_name)s: IPv6 net/len %(if_addr)s/%(if_len)s" %
                       self._params)
         f.write("""\
 subnet6 %(if_net)s/%(if_len)s {
@@ -288,7 +288,7 @@ host host-%s {
         if self.log == None:
             self.log = target.log
             self.state_dir = os.path.join(target.state_dir,
-                                          "dhcpd" % self.ip_mode)
+                                          "dhcpd-%d" % self.ip_mode)
             self.pxe_dir = os.path.join(tftp_dir, tftp_prefix)
             self.dhcpd_pidfile = os.path.join(self.state_dir, "dhcpd.pid")
 
