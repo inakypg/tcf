@@ -102,12 +102,14 @@ class pci(ttbl.tt_power_control_impl):
     def __init__(self,
                  if_addr,
                  if_net,
-                 if_netmask,
+                 if_len,
                  ip_addr_range_bottom,
                  ip_addr_range_top,
                  mac_ip_map = None,
                  allow_unmapped = False,
-                 debug = False):
+                 debug = False,
+                 ip_mode = 4):
+        assert ip_mode in (4, 6)
         ttbl.tt_power_control_impl.__init__(self)
         self.allow_unmapped = allow_unmapped
         if mac_ip_map == None:
@@ -120,10 +122,15 @@ class pci(ttbl.tt_power_control_impl):
             tftp_prefix = tftp_prefix,
             if_net = if_net,
             if_addr = if_addr,
-            if_netmask = if_netmask,
+            if_len = if_len,
             ip_addr_range_bottom = ip_addr_range_bottom,
             ip_addr_range_top = ip_addr_range_top,
         )
+
+        self.ip_mode = ip_mode
+        if ip_mode == 4:
+            self._params['if_netmask'] = commonl.ipv4_len_to_netmask_ascii(if_len)
+
         if allow_unmapped:
             self._params["allow_known_clients"] = "allow known clients;"
         else:
@@ -137,10 +144,13 @@ class pci(ttbl.tt_power_control_impl):
         self.dhcpd_pidfile = None
         self.tftpd_pidfile = None
 
-    def _dhcp_conf_write(self):
-        # Write DHCPD configuration
-        with open(os.path.join(self.state_dir, "dhcpd.conf"), "wb") as f:
-            f.write("""\
+    def _dhcp_conf_write_ipv4(self, f):
+        # generate the ipv4 part
+        self.log.info("%s: IPv4 net/mask %s/%s",
+                      self._params['if_name'], self._params['if_net'],
+                      self._params['if_netmask'])
+        # We only do PXE over ipv4
+        f.write("""\
 option space pxelinux;
 option pxelinux.magic code 208 = string;
 option pxelinux.configfile code 209 = text;
@@ -150,12 +160,10 @@ option pxelinux.reboottime code 211 = unsigned integer 32;
 option architecture-type code 93 = unsigned integer 16;
 
 """)
-            # generate the ipv4 part
-            self.log.info("%s: IPv4 net/mask %s/%s",
-                          self._params['if_name'], self._params['if_net'],
-                          self._params['if_netmask'])
-            # FIXME: make it so using pxelinux is a configuratio template (likewise on the tftp side, so we can swithc to EFI boot or whatever we want)
-            f.write("""\
+        # FIXME: make it so using pxelinux is a configuratio template
+        # (likewise on the tftp side, so we can swithc to EFI boot or
+        # whatever we want)
+        f.write("""\
 subnet %(if_net)s netmask %(if_netmask)s {
         pool {
                 %(allow_known_clients)s
@@ -181,52 +189,50 @@ subnet %(if_net)s netmask %(if_netmask)s {
                 next-server %(if_addr)s;
         }
 """ % self._params)
-            f.write("""\
-}
-""")
-            for mac, mac_data in self._mac_ip_map.iteritems():
-                ipv4_addr = mac_data.get('ipv4_addr', None)
-                if ipv4_addr:
-                    f.write("""\
+        for mac, mac_data in self._mac_ip_map.iteritems():
+            ipv4_addr = mac_data.get('ipv4_addr', None)
+            if ipv4_addr:
+                f.write("""\
 host host-%s {
 	hardware ethernet %s;
         fixed-address %s;
 }
 """ % (mac.replace(":", "-"), mac, ipv4_addr))
-
-    if False:
-        #
-        # FIXME: we need to fire a whole new DHCP daemon with -6 -- they
-        # don't coexist
-        #
-        # First fold if_netmask into if_len and generate netsmask from
-        # there
-        # def ipv4_len_to_netmask_ascii(len)
-        #    return socket.inet_ntoa(struct.pack('>I', 0xffffffff ^ ((1 << (32 - len) ) - 1)))
+        f.write("""\
+}
+""")
 
 
-                    # generate the ipv6 part
-                    self.log.info("%s: IPv6 net/mask %s/%s",
-                                  self._params['if_name'], self._params['if_net'],
-                                  self._params['if_netmask'])
-                    f.write("""\
-        subnet6 %(if6_net)s/ %(if6_len)s {
-                range6 %(ip6_addr_range_bottom)s  %(ip6_addr_range_top)s;
-        """ % self._params)
-                    for mac, mac_data in self._mac_ip_map.iteritems():
-                        ipv6_addr = mac_data.get('ipv6_addr', None)
-                        if ipv6_addr:
-                            f.write("""\
-                host host-%s {
-                        hardware ethernet %s;
-                        fixed-address6 %s;
-                }
-        """ % (mac.replace(":", "-"), mac, ipv6_addr))
-                    f.write("""\
-        }
-        """)
+    def _dhcp_conf_write_ipv6(self, f):
+        # generate the ipv6 part -- we only use it to assign
+        # addresses; PXE is done only over ipv4
+        self.log.info("%(if_name)s: IPv6 net/len %(if_addr)/%(if_len)s" %
+                      self._params)
+        f.write("""\
+subnet6 %(if_net)s/%(if_len)s {
+        range6 %(ip_addr_range_bottom)s  %(ip_addr_range_top)s;
+""" % self._params)
+        for mac, mac_data in self._mac_ip_map.iteritems():
+            ipv6_addr = mac_data.get('ipv6_addr', None)
+            if ipv6_addr:
+                f.write("""\
+host host-%s {
+        hardware ethernet %s;
+        fixed-address6 %s;
+                o}
+""" % (mac.replace(":", "-"), mac, ipv6_addr))
+        f.write("""\
+}
+""")
 
-
+    def _dhcp_conf_write(self):
+        # Write DHCPD configuration
+        with open(os.path.join(self.state_dir, "dhcpd.conf"),
+                  "wb") as f:
+            if self.ip_mode == 4:
+                self._dhcp_conf_write_ipv4(f)
+            else:
+                self._dhcp_conf_write_ipv6(f)
 
     def _dhcpd_start(self):
         # Fire up the daemons
@@ -235,6 +241,10 @@ host host-%s {
         with open(dhcpd_leases_name, 'a'):
             # touch the access/modify time to now
             os.utime(dhcpd_leases_name, None)
+        if self.ip_mode == 4:
+            ip_mode = "-4"
+        else:
+            ip_mode = "-6"
         args = [
             # Requires CAP_NET_BIND_SERVICE CAP_NET_ADMIN
             #"strace", "-f", "-s2048", "-o/tmp/kk.log",
@@ -242,6 +252,7 @@ host host-%s {
             # Run it in foreground, so the process group owns it and
             # kills it when exiting
             "-f",
+            ip_mode,
             "-cf", os.path.join(self.state_dir, "dhcpd.conf"),
             "-lf", dhcpd_leases_name,
             "-pf", self.dhcpd_pidfile,
@@ -276,10 +287,10 @@ host host-%s {
         # might be in a different process
         if self.log == None:
             self.log = target.log
-            self.state_dir = os.path.join(target.state_dir, "dhcpd")
+            self.state_dir = os.path.join(target.state_dir,
+                                          "dhcpd" % self.ip_mode)
             self.pxe_dir = os.path.join(tftp_dir, tftp_prefix)
             self.dhcpd_pidfile = os.path.join(self.state_dir, "dhcpd.pid")
-            self.tftpd_pidfile = os.path.join(self.state_dir, "tftpd.pid")
 
 
     def power_on_do(self, target):
