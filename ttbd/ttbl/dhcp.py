@@ -40,6 +40,7 @@ import subprocess
 
 import commonl
 import ttbl
+import ttbl.config
 
 # FIXME: config setting ttbd-staging
 tftp_prefix = "ttbd-staging"
@@ -139,6 +140,7 @@ class pci(ttbl.tt_power_control_impl):
 
         self.debug = debug
         self.log = None
+        self.target = None	# we find this when power_*_do() is called
         self.state_dir = None
         self.pxe_dir = None
         self.dhcpd_pidfile = None
@@ -189,15 +191,27 @@ subnet %(if_net)s netmask %(if_netmask)s {
                 next-server %(if_addr)s;
         }
 """ % self._params)
-        for mac, mac_data in self._mac_ip_map.iteritems():
-            ipv4_addr = mac_data.get('ipv4_addr', None)
-            if ipv4_addr:
-                f.write("""\
-host host-%s {
-	hardware ethernet %s;
-        fixed-address %s;
-}
-""" % (mac.replace(":", "-"), mac, ipv4_addr))
+
+        # Now, enumerate the targets that are in this local
+        # configuration and figure out what's their IP address in
+        # this network; create a hardcoded entry for them.
+        #
+        # FIXME: This leaves a gap, as targets in other servers could
+        # be connected to this network. Sigh.
+        for target_id, target in ttbl.config.targets.iteritems():
+            interconnects = target.tags.get('interconnects', {})
+            for ic_id, interconnect in interconnects.iteritems():
+                if ic_id != self.target.id:
+                    continue
+                mac_addr = interconnect.get('mac_addr', None)
+                ipv4_addr = interconnect.get('ipv4_addr', None)
+                if ipv4_addr and mac_addr:
+                    f.write("""\
+        host %s {
+                hardware ethernet %s;
+                fixed-address %s;
+        }
+""" % (target_id, mac_addr, ipv4_addr))
         f.write("""\
 }
 """)
@@ -212,15 +226,30 @@ host host-%s {
 subnet6 %(if_net)s/%(if_len)s {
         range6 %(ip_addr_range_bottom)s  %(ip_addr_range_top)s;
 """ % self._params)
-        for mac, mac_data in self._mac_ip_map.iteritems():
-            ipv6_addr = mac_data.get('ipv6_addr', None)
-            if ipv6_addr:
-                f.write("""\
-host host-%s {
-        hardware ethernet %s;
-        fixed-address6 %s;
-                o}
-""" % (mac.replace(":", "-"), mac, ipv6_addr))
+
+        # Now, enumerate the targets that are in this local
+        # configuration and figure out what's their IP address in
+        # this network; create a hardcoded entry for them.
+        #
+        # FIXME: This leaves a gap, as targets in other servers could
+        # be connected to this network. Sigh.
+        for target_id, target in ttbl.config.targets.iteritems():
+            self.target.log.error("DEBUG checking %s", target_id)
+            interconnects = target.tags.get('interconnects', {})
+            for ic_id, interconnect in interconnects.iteritems():
+                self.target.log.error("DEBUG checking ic %s", ic_id)
+                if ic_id != self.target.id:
+                    continue
+                mac_addr = interconnect.get('mac_addr', None)
+                ipv6_addr = interconnect.get('ipv6_addr', None)
+                if ipv6_addr and mac_addr:
+                    f.write("""\
+        host %s {
+                hardware ethernet %s;
+                fixed-address6 %s;
+        }
+""" % (target_id, mac_addr, ipv6_addr))
+
         f.write("""\
 }
 """)
@@ -298,6 +327,10 @@ host host-%s {
         Start DHCPd and TFTPd servers on the network interface
         described by `target`
         """
+        if self.target == None:
+            self.target = target
+        else:
+            assert self.target == target
         # FIXME: detect @target is an ipv4 capable network, fail otherwise
         self._init_for_process(target)
         # Create runtime directory where we place everything
@@ -328,11 +361,19 @@ host host-%s {
         self._dhcpd_start()
 
     def power_off_do(self, target):
+        if self.target == None:
+            self.target = target
+        else:
+            assert self.target == target
         self._init_for_process(target)
         commonl.process_terminate(self.dhcpd_pidfile,
                                   path = self.dhcpd_path, tag = "dhcpd")
 
     def power_get_do(self, target):
+        if self.target == None:
+            self.target = target
+        else:
+            assert self.target == target
         self._init_for_process(target)
         dhcpd_pid = commonl.process_alive(self.dhcpd_pidfile, self.dhcpd_path)
         if dhcpd_pid != None:
