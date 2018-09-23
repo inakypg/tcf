@@ -8,7 +8,7 @@
   
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   
-  <title>Search &mdash; Test Case Framework 0.11 documentation</title>
+  <title>TCF &mdash; Test Case Framework 0.11 documentation</title>
   
 
   
@@ -34,7 +34,7 @@
   
         <link rel="index" title="Index"
               href="genindex.html"/>
-        <link rel="search" title="Search" href="#"/>
+        <link rel="search" title="Search" href="search.html"/>
     <link rel="top" title="Test Case Framework 0.11 documentation" href="index.html"/> 
 
   
@@ -71,7 +71,7 @@
 
           
 <div role="search">
-  <form id="rtd-search-form" class="wy-form" action="#" method="get">
+  <form id="rtd-search-form" class="wy-form" action="search.html" method="get">
     <input type="text" name="q" placeholder="Search docs" />
     <input type="hidden" name="check_keywords" value="yes" />
     <input type="hidden" name="area" value="default" />
@@ -144,10 +144,14 @@
     
       <li><a href="index.html">Docs</a> &raquo;</li>
         
-      <li>Search</li>
+      <li>TCF</li>
     
     
       <li class="wy-breadcrumbs-aside">
+        
+            
+            <a href="_sources/README.rst.txt" rel="nofollow"> View page source</a>
+          
         
       </li>
     
@@ -159,19 +163,68 @@
           <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
            <div itemprop="articleBody">
             
-  <noscript>
-  <div id="fallback" class="admonition warning">
-    <p class="last">
-      Please activate JavaScript to enable the search
-      functionality.
-    </p>
-  </div>
-  </noscript>
+  <div class="section" id="tcf">
+<h1>TCF<a class="headerlink" href="#tcf" title="Permalink to this headline">¶</a></h1>
+<p>TCF is a system that simplifies the creation and execution of test
+cases (automation, for that matter) with minimal setup effort by
+engineers (SW, QA and release) and autobuilders alike across a wide
+amount of hardware platforms. It is distributed under the terms of the
+Apache 2.0 license.</p>
+<p>The test framework provides means to:</p>
+<blockquote>
+<div><ul class="simple">
+<li>Discover and run one or many unit, integration, end-to-end automated
+test cases or samples with a single command line; these test cases
+may need no target (run in the local host) or one or
+more targets on which to operate.</li>
+<li>Locate, manage and share target hardware to maximize
+resource efficiency</li>
+</ul>
+</div></blockquote>
+<p>A developer will create a feature and as part of that will create unit
+test cases which will be executed while developing the features until
+the feature is complete. Other engineers (eg: QA) might create more
+unit tests, integration and end-to-end tests to validate different
+features working together. Testcase metadata added to the test cases
+indicates how to build it, where can it be run and how to determine if
+it is succesful or not, or how to extract significant data (like
+resource consumption, performance, etc) for postprocessing. These test
+cases can then be commited as part of the code so that other
+people/agents can run them. The testcase can request targets, power
+them up/down, connect/disconnect things to/from it, etc</p>
+<p>When is time to run the testcases, a developer, QA engineer, or
+CI/automation system launches <em>tcf</em>, which locates them, locates
+remote targets where to execute them them, builds and evaluate them,
+parallelizing as much as possible and generating reports about the
+execution.</p>
+<p>The system consists of two parts:</p>
+<blockquote>
+<div><ul class="simple">
+<li><em>tcf</em>: the client and test runner; this command line utility it is
+used to manage the test targets exported by the test target brokers
+(servers) and to execute test cases on said targets.</li>
+<li><em>ttbd</em>: the server; this manages test targets connected to them,
+serving as a proxy to the test cases being run by <em>tcf</em> on behalf
+of users.</li>
+</ul>
+</div></blockquote>
+<p>TCF focuses only on execution, leaving reporting, coverage analysis,
+etc, to other tools, providing means to feed data into them. It is
+designed with the goal of having a small footprint and little
+dependencies.</p>
+<p>Report issues and contact the authors by filling issues in
+<a class="reference external" href="https://github.com/intel/tcf/issues">https://github.com/intel/tcf/issues</a>.</p>
+<div class="section" id="installation">
+<h2>Installation<a class="headerlink" href="#installation" title="Permalink to this headline">¶</a></h2>
+<p>Visit the quickstart <a class="reference external" href="https://intel.github.io/tcf/02-QUICKSTART.html">instructions</a>.</p>
+</div>
+<div class="section" id="documentation">
+<h2>Documentation<a class="headerlink" href="#documentation" title="Permalink to this headline">¶</a></h2>
+<p>Available at <a class="reference external" href="http://intel.github.io/tcf">http://intel.github.io/tcf</a></p>
+<p>Best practices for contributing available at the <a class="reference external" href="https://intel.github.io/tcf/doc/02-guides.html#contributing">guide</a>.</p>
+</div>
+</div>
 
-  
-  <div id="search-results">
-  
-  </div>
 
            </div>
            <div class="articleComments">
@@ -217,7 +270,6 @@
       <script type="text/javascript" src="_static/jquery.js"></script>
       <script type="text/javascript" src="_static/underscore.js"></script>
       <script type="text/javascript" src="_static/doctools.js"></script>
-      <script type="text/javascript" src="_static/searchtools.js"></script>
 
   
 
@@ -233,14 +285,7 @@
           SphinxRtdTheme.StickyNav.enable();
       });
   </script>
-  
-  <script type="text/javascript">
-    jQuery(function() { Search.loadIndex("searchindex.js"); });
-  </script>
-  
-  <script type="text/javascript" id="searchindexloader"></script>
    
-
 
 </body>
 </html>
