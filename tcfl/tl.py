@@ -10,6 +10,7 @@ Common utilities for test cases
 """
 
 import os
+import traceback
 
 import tcfl.tc
 
@@ -204,3 +205,96 @@ def tcpdump_collect(ic, filename = None):
     ic.power.off()		# ensure tcpdump flushes
     ic.broker_files.dnload(ic.kws['tc_hash'] + ".cap", filename)
     ic.report_info("tcpdump available in file %s" % filename)
+
+def domain_deploy(ic, target, domain, domain_seed,
+                  # FIXME: ideally these could be defaulted
+                  boot_dev = None, root_dev = None,
+                  boot_domain_service = "service",
+                  sos_prompt = None):
+
+    """
+
+    Domain spec DOMAIN:SPIN:VERSION:SUBVERSION:SUBVERSION
+
+    FIXME:
+     - fix to autologing serial console?
+     - do a couple retries if fails?
+     - increase in property bd.stats.client.sos_boot_failures and
+       bd.stats.client.sos_boot_count (to get a baseline_
+     - tag bd.stats.last_reset to DATE
+    Note: you might want the interconnect power cycled
+    """
+    testcase = target.testcase
+
+    assert isinstance(boot_dev, basestring), \
+        "FIXME: specify boot_dev, guessing not supported yet"
+    assert isinstance(root_dev, basestring), \
+        "FIXME: specify root_dev, guessing not supported yet"
+
+    # FIXME: check ic is powered on?
+    target.report_info("rebooting into service domain for flashing")
+    target.property_set("boot_domain", boot_domain_service)
+    target.power.cycle()
+
+    # Sequence for TCF-live based on Fedora
+    if sos_prompt:
+        target.shell.linux_shell_prompt_regex = sos_prompt
+    target.shell.up()
+    target.shell.linux_shell_prompt_regex = "prompt: "
+    target.shell.run("PS1='pro''mpt: '")
+
+    # FIXME: take from configuration
+
+    # FIXME: use default dict?
+    kws = dict(
+        rsync_server = ic.kws['ipv4_addr'],
+        domain = domain,
+        domain_seed = domain_seed,
+        boot_dev = boot_dev,
+        root_dev = root_dev,
+    )
+
+    # FIXME: recover if not formated
+    try:
+        # FIXME: act on failing, just reformat and retry, then
+        # bail out on failure
+        target.report_info("mounting /mnt to image")
+        target.shell.run("mount " + root_dev + " /mnt")
+        # FIXME: handle /mnt: wrong fs type, bad option, bad
+        # superblock on /dev/sda5, missing codepage or helper
+        # program, or other error. or errors mounting and just reformat
+        target.report_info("mounted /mnt to image")
+        if domain_seed:
+            target.report_info("rsyncing seed %(domain_seed)s from "
+                               "%(rsync_server)s to /mnt" % kws)
+            try:
+                original_timeout = testcase.expecter.timeout
+                testcase.expecter.timeout = 800
+                target.shell.run(
+                    "time rsync -aX --numeric-ids --delete "
+                    "%(rsync_server)s::images/%(domain_seed)s/. /mnt/."
+                    % kws)
+            finally:
+                testcase.expecter.timeout = original_timeout
+
+            # Configure the bootloader
+            #
+            # We do it by hand -- with shell commands, so it is
+            # easy to reproduce by a user typing them
+
+            # FIXME: we are EFI only for now, way easier
+            # Make sure we have all the entries for systemd-loader
+        target.shell.run("/root/boot-config.py %(domain)s %(boot_dev)s "
+                         "%(root_dev)s /mnt/boot /boot" % kws)
+        target.shell.run("sync")
+        target.shell.run("sync")
+        # Now setup the local boot loader to boot off that
+        target.property_set("boot_domain", domain)
+    except Exception as e:
+        target.report_info("BUG? exception %s: %s %s" %
+                           (type(e).__name__, e, traceback.format_exc()))
+        raise
+    finally:
+        target.shell.run("umount /mnt")
+
+    target.report_info("deployed %(domain_seed)s to %(root_dev)s" % kws)
