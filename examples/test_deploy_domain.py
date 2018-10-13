@@ -27,7 +27,7 @@ class aio(tcfl.tc.tc_c):
 
         ic.power.cycle()
         # Deploy
-        tcfl.tl.domain_deploy(ic, target, domain, "%s-%d" % (domain, version),
+        tcfl.tl.domain_deploy(ic, target, domain, "%s-%s" % (domain, version),
                               "/dev/sda", "/dev/sda5")
 
         # If there are errors, exceptions will come,but otherwise we
@@ -53,7 +53,7 @@ class aio(tcfl.tc.tc_c):
         # release it for anyone else -- a TC that needs the
         # interconnect would not do this
         ic.release()
-        target.report_pass("fedora-%d: booted" % version)
+        target.report_pass("%s-%s: booted" % (domain, version))
 
     #
     # Run our tests
