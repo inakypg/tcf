@@ -2,31 +2,30 @@
 
 import logging
 import os
-import pprint
 import subprocess
-import shutil
 
 # Snipped lifted from https://stackoverflow.com/a/29156997
 import ctypes
 import ctypes.util
-import os
 
 libc = ctypes.CDLL(ctypes.util.find_library('c'), use_errno = True)
-libc.mount.argtypes = (ctypes.c_char_p, ctypes.c_char_p, ctypes.c_char_p, ctypes.c_ulong, ctypes.c_char_p)
+libc.mount.argtypes = (ctypes.c_char_p, ctypes.c_char_p, ctypes.c_char_p,
+                       ctypes.c_ulong, ctypes.c_char_p)
 
 def mount(source, target, fs, options=''):
-  ret = libc.mount(source, target, fs, 0, options)
-  if ret < 0:
-      errno = ctypes.get_errno()
-      raise OSError(errno, "Error mounting {} ({}) on {} with options '{}': {}".
-                    format(source, fs, target, options, os.strerror(errno)))
+    ret = libc.mount(source, target, fs, 0, options)
+    if ret < 0:
+        errno = ctypes.get_errno()
+        raise OSError(errno,
+                      "Error mounting {} ({}) on {} with options '{}': {}".
+                      format(source, fs, target, options, os.strerror(errno)))
 # End of snippet lifted from https://stackoverflow.com/a/29156997
 def umount(source):
-  ret = libc.umount(source)
-  if ret < 0:
-      errno = ctypes.get_errno()
-      raise OSError(errno, "Error umounting {}: {}".
-                    format(source, os.strerror(errno)))
+    ret = libc.umount(source)
+    if ret < 0:
+        errno = ctypes.get_errno()
+        raise OSError(errno, "Error umounting {}: {}".
+                      format(source, os.strerror(errno)))
 
 
 # creates from scratch
@@ -35,7 +34,7 @@ def umount(source):
 # stick to do it using cmdline parted.
 
 if True:
-    # physical vs 
+    # physical vs
     boot_size = 2
     swap_size = 10
     home_size = 50
@@ -53,11 +52,12 @@ def disk_partition(blkdev):
 
     devname = os.path.basename(blkdev)
     blocks = int(open("/sys/block/%s/size" % devname).read())
-    block_size = int(open("/sys/block/%s/queue/physical_block_size" % devname).read())
+    block_size = int(open("/sys/block/%s/queue/physical_block_size"
+                          % devname).read())
     size_gb = blocks * block_size / 1024 / 1024 / 1024
 
     cmdline = [
-        "parted", 
+        "parted",
         "-a", "optimal",	# Decide optimal alignment
         # treat this as a script
         "-ms",
@@ -89,13 +89,13 @@ def disk_partition(blkdev):
 
     # Don't rely in partition labels, they fail a lot
     boot_dev = blkdev + "1"
-    
+
     log.info("creating boot FS %s", boot_dev)
     subprocess.call([ "mkfs.vfat", "-F32", "-n", "TCF-BOOT", boot_dev ])
     subprocess.call([ "sync" ])
     # We don't do anything with it -- the deployment script is the one
     # that will set it up accordingly for each image and install a
-    # boot loader, etc. 
+    # boot loader, etc.
     disk_reinit_swap_home(blkdev)
 
 def disk_reinit_swap_home(blkdev):
@@ -103,10 +103,9 @@ def disk_reinit_swap_home(blkdev):
     home_dev = blkdev + "3"
     # always reflash a couple things
     subprocess.call([ "mkswap", "-L", "tcf-swap", swap_dev ])
-        
+
     subprocess.call([ "mkfs.ext4", "-FqL", "tcf-home", home_dev ])
-        
+
 logging.basicConfig(level = logging.INFO)
 device = os.environ.get("DEVICE", "/dev/nbd0")
 disk_partition(device)
-
