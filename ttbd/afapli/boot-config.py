@@ -1,16 +1,15 @@
 #! /usr/bin/python2
 
-import distutils.version
 import glob
-import subprocess
 import os
 import re
 import shutil
+import subprocess
 import sys
 
-
 if len(sys.argv) < 5:
-    sys.stderr.write("Missing arguments: DOMAIN DEVICE ROOTPART BOOTSRCDIR BOOTDSTDIR\n")
+    sys.stderr.write("Missing arguments: "
+                     "DOMAIN DEVICE ROOTPART BOOTSRCDIR BOOTDSTDIR\n")
     sys.exit(1)
 domain = sys.argv[1]
 dev = sys.argv[2]
@@ -30,7 +29,7 @@ def boot_extract_from_dir(output):
     Given a list of files (normally) in /boot, decide which ones are
     Linux kernels and initramfs; select the latest version
     """
-    kernel_regex = re.compile("(initramfs|initrd|bzImage|vmlinuz)-(.*)")
+    kernel_regex = re.compile("(initramfs|initrd|bzImage|vmlinuz)(-(.*))?")
     kernel_versions = {}
     initramfs_versions = {}
     for line in output.splitlines():
@@ -39,7 +38,7 @@ def boot_extract_from_dir(output):
             continue
         file_name = m.groups()[0]
         kver = m.groups()[1]
-        if "rescue" in kver or "kdump" in kver:
+        if kver and ("rescue" in kver or "kdump" in kver):
             # these are usually found on Fedora
             continue
         elif file_name in ( "initramfs", "initrd" ):
@@ -58,7 +57,7 @@ def boot_extract_from_dir(output):
     elif len(kernel_versions) > 1:
         sys.stderr.write("ERROR: more than one kernel entry in %s\n"
                          % boot_srcdir)
-        sys.exit(1)        
+        sys.exit(1)
     else:
         return None, None, ""
 
@@ -67,7 +66,7 @@ def boot_extract_from_lec(lec_name):
     initrd = None
     options = None
     # open a loader entry, extract the kernel, initramfs and options
-    dibs_regex = re.compile("^\s*(?P<command>linux|initrd|efi|options)\s+"
+    dibs_regex = re.compile(r"^\s*(?P<command>linux|initrd|efi|options)\s+"
                             "(?P<value>[^\n]+)\n?")
     with open(lec_name) as f:
         for line in f:
@@ -82,10 +81,10 @@ def boot_extract_from_lec(lec_name):
             elif command == 'efi':
                 kernel = value
             elif command == 'initrd':
-                initrd == value
+                initrd = value
             elif command == 'options':
                 options = value
-            
+
     return kernel, initrd, options
 
 # boot setup
@@ -96,14 +95,14 @@ if len(les) > 1:
     sys.stderr.write("ERROR: more than one loader entry in %s\n" % boot_srcdir)
     sys.exit(1)
 if len(les) == 1:
+    print "I: guessing boot from Loader Entry Config"
     kernel, initramfs, options = boot_extract_from_lec(les[0])
 else:
     output = subprocess.check_output([ "ls", "-1", boot_srcdir ])
+    print "I: guessing boot from directory", output
     kernel, initramfs, options = boot_extract_from_dir(output)
 
-print "DEBUG", kernel
-print "DEBUG", initramfs
-print "DEBUG", options
+print "kernel: ", kernel, " initramfs: ", initramfs, " options:", options
 
 # remove absolutization (some specs have it), as we need to copy from
 # mounted filesystems
@@ -118,6 +117,7 @@ boot_dev = dev + "1"
 
 kws = dict(
     domain = domain,
+    domain_filename_safe = domain.replace(":", "_"),
     root_dev = root_dev,
     boot_dev = boot_dev,
     kernel = os.path.basename(kernel),
@@ -127,7 +127,7 @@ if initramfs:
 
 # FIXME: bring from command line?
 prefix_options = [
-    "console=ttyUSB0,115200n81"
+    "console=ttyUSB0,115200n8"
 ]
 
 replace_options = {
@@ -140,26 +140,28 @@ for option in prefix_options:
 
 for option, value in replace_options.iteritems():
     if re.search(r"\n" + option, options):
-        options = re.sub(r"\b" + option + "=\S+",
+        options = re.sub(r"\b" + option + r"=\S+",
                          option + "=" + replace_options[option] % kws,
                          options)
     else:
         options += " " + option + "=" + value % kws
-        
+
 kws['options'] = options
 
 le_dir = os.path.join(boot_dstdir, "loader", "entries")
 # mkfs.vfat /boot, mount it
 mounted = False
+print "I: making directory: %s" % le_dir
 try:
     if root_dev != "nil":
         subprocess.call([ "mkfs.vfat", "-F32", "-n", "TCF-BOOT", boot_dev ])
         subprocess.call([ "sync" ])
         subprocess.call([ "mount", boot_dev, boot_dstdir ])
         mounted = True
+        print "I: making directory: %s" % le_dir
         os.makedirs(le_dir)
         with open(os.path.join(boot_dstdir, "README"), "w") as readmef:
-                  readmef.write("""\
+            readmef.write("""\
     This boot configuration was written by TCF's AFAPLI client hack; it is
     meant to boot multiple Linux distros coexsiting in the
     same drive.
@@ -174,7 +176,7 @@ try:
     configured in particular ways).
     """)
 
-    le_c = os.path.join(le_dir, "domain-%(domain)s.conf" % kws)
+    le_c = os.path.join(le_dir, "domain-%(domain_filename_safe)s.conf" % kws)
     with open(le_c, "w") as le_f:
         shutil.copyfile(os.path.join(boot_srcdir, kernel),
                         os.path.join(boot_dstdir, os.path.basename(kernel)))
@@ -183,8 +185,9 @@ title %(domain)s
 linux /%(kernel)s
     """ % kws)
         if 'initramfs' in kws:
-            shutil.copyfile(os.path.join(boot_srcdir, initramfs),
-                            os.path.join(boot_dstdir, os.path.basename(initramfs)))
+            shutil.copyfile(
+                os.path.join(boot_srcdir, initramfs),
+                os.path.join(boot_dstdir, os.path.basename(initramfs)))
             le_f.write("initrd /%(initramfs)s\n" % kws)
         le_f.write("options %(options)s\n" % kws)
 
@@ -192,11 +195,11 @@ linux /%(kernel)s
     try:
         output = subprocess.check_output([ "bootctl", "remove" ])
     except subprocess.CalledProcessError as e:
-        print "DEBUG bootctrl (failed) remove output: ", e.output
+        print "bootctrl (failed) remove output: ", e.output
     try:
         output = subprocess.check_output([ "bootctl", "install" ])
     except subprocess.CalledProcessError as e:
-        print "DEBUG bootctrl (failed) remove output: ", e.output
+        print "bootctrl (failed) remove output: ", e.output
         raise
     # Now make sure the new entry is after IPv4, as we use IPv4's boot
     # to redirect to the right one
@@ -211,9 +214,13 @@ linux /%(kernel)s
     # Boot0006* UEFI : LAN : IP4 Intel(R) Ethernet Connection (3) I218-V
     output = subprocess.check_output([ "efibootmgr" ])
 
-    bo_regex = re.compile("^BootOrder: (?P<boot_order>([a-fA-F0-9]{4},)*[a-fA-F0-9]{4})$", re.MULTILINE)
-    lbm_regex = re.compile("^Boot(?P<entry>[a-fA-F0-9]{4})\*? (?P<name>Linux Boot Manager$)", re.MULTILINE)
-    ipv4_regex = re.compile("^Boot(?P<entry>[a-fA-F0-9]{4})\*? (?P<name>.*IPv?4.*$)", re.MULTILINE)
+    bo_regex = re.compile(r"^BootOrder: "
+                          "(?P<boot_order>([a-fA-F0-9]{4},)*[a-fA-F0-9]{4})$",
+                          re.MULTILINE)
+    lbm_regex = re.compile(r"^Boot(?P<entry>[a-fA-F0-9]{4})\*? "
+                           "(?P<name>Linux Boot Manager$)", re.MULTILINE)
+    ipv4_regex = re.compile(r"^Boot(?P<entry>[a-fA-F0-9]{4})\*? "
+                            "(?P<name>.*IPv?4.*$)", re.MULTILINE)
     bom_m = bo_regex.search(output)
     if bom_m:
         boot_order = bom_m.groupdict()['boot_order'].split(",")
@@ -233,7 +240,7 @@ linux /%(kernel)s
     ipv4_name = ipv4_m.groupdict()['name']
 
     # the first to boot has to be ipv4, then linux boot manager
-    
+
     if lbm in boot_order:
         boot_order.remove(lbm)
     if ipv4 in boot_order:
@@ -243,7 +250,7 @@ linux /%(kernel)s
     subprocess.check_output([ "efibootmgr", "-o", ",".join(boot_order) ])
     print "Setting next boot to be Linux Boot Manager"
     subprocess.check_output([ "efibootmgr", "-n", lbm ])
-    
+
 finally:
     if mounted:
         subprocess.call([ "umount", boot_dev ])
