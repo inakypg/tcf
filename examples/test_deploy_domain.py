@@ -14,8 +14,7 @@ import re
 import tcfl.tc
 import tcfl.tl
 
-domain = os.environ.get("DOMAIN", "Fedora")
-version = os.environ.get("DOMAIN_VERSION", 28)
+domain = os.environ.get("DOMAIN")
 
 @tcfl.tc.interconnect("ipv4_addr")
 @tcfl.tc.target('linux and boot_interconnect')
@@ -27,7 +26,7 @@ class aio(tcfl.tc.tc_c):
 
         ic.power.cycle()
         # Deploy
-        tcfl.tl.domain_deploy(ic, target, domain, "%s-%s" % (domain, version),
+        tcfl.tl.domain_deploy(ic, target, domain, domain,
                               "/dev/sda", "/dev/sda5")
 
         # If there are errors, exceptions will come,but otherwise we
@@ -53,7 +52,7 @@ class aio(tcfl.tc.tc_c):
         # release it for anyone else -- a TC that needs the
         # interconnect would not do this
         ic.release()
-        target.report_pass("%s-%s: booted" % (domain, version))
+        target.report_pass(domain)
 
     #
     # Run our tests
