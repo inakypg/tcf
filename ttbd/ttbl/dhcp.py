@@ -1,36 +1,6 @@
 #! /usr/bin/python2
 #
-# FIXME: this is an experiment and it is not yet complete
-#
-# RPM dependencies:
-#
-# - tftp: set configs to dir upthere, indicate service is needed started, open firewall
-#   need perms to create /var/lib/tftpboot/ttbd-staging as ttbd:nobody
-# - dhcpd: service not started, we do our own config, open firewall
-# - httpd: service started, figure out where to put it
-# - nfs: server started, fixme how to place images?
-# - syslinux: 
-# - https server to serve images, it is way faster than tftp
-#
-# - nfs server serving images for service domain, easier than trusting
-#   the local setup
-#
-# - will use properties as source of things needed to boot
-#
-# - set
-#
-# - QEMU not netbooting
-#
-# - support no initramfs, no ip setting?
-#
-# - local boot has to be implemeted with !syslinux, so syslinux
-#   chainloads grub or whatever. Reason? that way we make sure there
-#   is a local way to boot the system.
-#
-# - we also want to use tftp as the swithcing mechanism as it doesn't
-#   need to reload config files (DHCPD does)--so it is easy to switch
-#   state.
-
+# All notes and documentation go to afapli/README.rst
 
 import os
 import pwd
@@ -177,13 +147,11 @@ subnet %(if_net)s netmask %(if_netmask)s {
                 if option architecture-type = 00:00 {
                         filename "%(tftp_prefix)s/lpxelinux.0";
                 } elsif option architecture-type = 00:09 {
-#                        filename "pxe/grubx64.efi";
-                        filename  "boot/grub2/x86_64-efi/core.efi";
+                        filename "%(tftp_prefix)s/efi-x86_64/syslinux.efi";
                 } elsif option architecture-type = 00:07 {
-#                        filename "pxe/grubx64.efi";
-                        filename  "boot/grub2/x86_64-efi/core.efi";
+                        filename "%(tftp_prefix)s/efi-x86_64/syslinux.efi";
                 } elsif option architecture-type = 00:06 {
-                        filename "pxe/syslinux-ia32.efi";
+                        filename "%(tftp_prefix)s/efi-x86/syslinux.efi";
                 } else {
                         filename "%(tftp_prefix)s/lpxelinux.0";
                 }
@@ -210,8 +178,9 @@ subnet %(if_net)s netmask %(if_netmask)s {
         host %s {
                 hardware ethernet %s;
                 fixed-address %s;
+                option host-name "%s";
         }
-""" % (target_id, mac_addr, ipv4_addr))
+""" % (target_id, mac_addr, ipv4_addr, target_id))
         f.write("""\
 }
 """)
@@ -223,8 +192,29 @@ subnet %(if_net)s netmask %(if_netmask)s {
         self.log.info("%(if_name)s: IPv6 net/len %(if_addr)s/%(if_len)s" %
                       self._params)
         f.write("""\
+# This one line must be outside any bracketed scope
+option architecture-type code 93 = unsigned integer 16;
+
 subnet6 %(if_net)s/%(if_len)s {
         range6 %(ip_addr_range_bottom)s  %(ip_addr_range_top)s;
+
+        class "pxeclients" {
+                match if substring (option vendor-class-identifier, 0, 9) = "PXEClient";
+                # http://www.syslinux.org/wiki/index.php?title=PXELINUX#UEFI
+                if option architecture-type = 00:00 {
+                        filename "%(tftp_prefix)s/lpxelinux.0";
+                } elsif option architecture-type = 00:09 {
+                        filename "%(tftp_prefix)s/efi-x86_64/syslinux.efi";
+                } elsif option architecture-type = 00:07 {
+                        filename "%(tftp_prefix)s/efi-x86_64/syslinux.efi";
+                } elsif option architecture-type = 00:06 {
+                        filename "%(tftp_prefix)s/efi-x86/syslinux.efi";
+                } else {
+                        filename "%(tftp_prefix)s/lpxelinux.0";
+                }
+                # Point to the TFTP server, which is the same as this
+#                next-server %(if_addr)s;
+        }
 """ % self._params)
 
         # Now, enumerate the targets that are in this local
@@ -247,8 +237,9 @@ subnet6 %(if_net)s/%(if_len)s {
         host %s {
                 hardware ethernet %s;
                 fixed-address6 %s;
+                option host-name "%s";
         }
-""" % (target_id, mac_addr, ipv6_addr))
+""" % (target_id, mac_addr, ipv6_addr, target_id))
 
         f.write("""\
 }
@@ -339,9 +330,21 @@ subnet6 %(if_net)s/%(if_len)s {
         # TFTP setup
         shutil.rmtree(os.path.join(self.pxe_dir, "pxelinux.cfg"), ignore_errors = True)
         os.makedirs(os.path.join(self.pxe_dir, "pxelinux.cfg"))
+        commonl.makedirs_p(os.path.join(self.pxe_dir, "efi-x86_64"))
         os.chmod(os.path.join(self.pxe_dir, "pxelinux.cfg"), 0o0775)
         shutil.copy(os.path.join(syslinux_path, "lpxelinux.0"), self.pxe_dir)
         shutil.copy(os.path.join(syslinux_path, "ldlinux.c32"), self.pxe_dir)
+        # FIXME: Depends on package syslinux-efi64
+        subprocess.call([ "rsync", "-a", "--delete",
+                          # add that postfix / to make sure we sync
+                          # the dir and not create another subdir
+                          os.path.join(syslinux_path, "efi64") + "/.",
+                          os.path.join(self.pxe_dir, "efi-x86_64") ])
+        # We use always the same configurations; because the rsync
+        # above will remove the symlink, we re-create it
+        # We use a relative symlink so in.tftpd doesn't nix it
+        os.symlink("../pxelinux.cfg",
+                   os.path.join(self.pxe_dir, "efi-x86_64", "pxelinux.cfg"))
 
         # We set the parameters in a dictionary so we can use it to
         # format strings
@@ -429,7 +432,8 @@ def power_on_pre_boot_domain_setup(target):
     # The service
     kws = dict(
         # FIXME: ttbd server's IP address in nwa
-        http_url_prefix = "http://192.168.97.1/~inaky/",	# FIXME: booting over TFTP
+        # FIXME: booting over TFTP
+        http_url_prefix = "http://192.168.97.1/ttbd-staging/",
         ipv4_addr = interconnect['ipv4_addr'],
         #target_ipv4_gateway = interconnect['something']
         ipv4_gateway = "192.168.97.1",	# FIXME
@@ -438,20 +442,39 @@ def power_on_pre_boot_domain_setup(target):
         mac_addr = interconnect['mac_addr'],
         name = target.id,
         nfs_server = "192.168.97.1",				# FIXME
-        nfs_path = "/home/images/tcf-live",			# FIXME,
+        # FIXME: have the daemon hide the internal path?
+        nfs_path = "/home/ttbd/images/%(boot_domain)s",
     )
 
     kws['extra_kopts'] = ""
     if domain == 'service':
         kws['boot_domain'] = 'tcf-live'
         kws['root_dev'] = '/dev/nfs'
-        kws['extra_kopts'] += "initrd=%(http_url_prefix)sinitramfs-%(boot_domain)s " \
-                              "nfsroot=%(nfs_server)s:%(nfs_path)s rd.live.image selinux=0 audit=0"
-    else:
-        kws['boot_domain'] = domain
-        kws['root_dev'] = target.property_get("", "boot_domain_root_dev", "")
-        kws['extra_kopts'] += target.property_get("", "boot_domain_extra_kopts", "")
-    
+        # no 'single' so it force starts getty
+        # nfsroot: note we use UDP, so it is more resilitent to issues
+        kws['extra_kopts'] += \
+            "initrd=%(http_url_prefix)sinitramfs-%(boot_domain)s " \
+            "nfsroot=%(nfs_server)s:%(nfs_path)s,udp,soft " \
+            "rd.live.image selinux=0 audit=0 ro " \
+            "rd.luks=0 rd.lvm=0 rd.md=0 rd.dm=0 rd.multipath=0 " \
+            "plymouth.enable=0 "
+
+        # Clearlinux
+        # Can't get to boot ok
+        if False:
+            # - installed based on instructions /home/images/howto.rst
+            kws['boot_domain'] = 'clear-24710-installer'
+            # removed selinux=0 and single
+            kws['extra_kopts'] = \
+                "initrd=%(http_url_prefix)sinitramfs-%(boot_domain)s " \
+                "root=nfs:%(nfs_server)s:%(nfs_path)s,soft " \
+                "audit=0 modprobe.blacklist=ccipciedrv,aalbus,aalrms,aalrmc" \
+                "init=/usr/lib/systemd/systemd-bootchart initcall_debug" \
+                "tsc=reliable no_timer_check noreplace-smp" \
+                "kvm-intel.nested=1 intel_iommu=igfx_off cryptomgr.notests" \
+                "rcupdate.rcu_expedited=1 i915.fastboot=1 rcu_nocbs=0-64" \
+                "ro rootwait"
+
     mac_addr = kws['mac_addr']
     file_name = os.path.join(tftp_dir, tftp_prefix, "pxelinux.cfg",
                              # FIXME: 01- is the ARP type 1 for ethernet
@@ -461,25 +484,46 @@ def power_on_pre_boot_domain_setup(target):
     # breakage, so we use Python's \ for clearer, shorter lines which
     # will be pasted all together
 
-    # FIXME: move somewhere else more central?
-    #
-    # IP specification is needed so the kernel acquires an IP address
-    # and can syslog/nfsmount, etc Note we know the fields from the
-    # target's configuration, as they are pre-assigned
-    #
-    # <client-ip>:<server-ip>:<gw-ip>:<netmask>:<hostname>:<device>:<autoconf>:<dns0-ip>:<dns1-ip>:<ntp0-ip>
-    config = """\
-say TCF Network boot
-serial 0 115200
+    if domain == "service":
+        # FIXME: move somewhere else more central?
+        #
+        # IP specification is needed so the kernel acquires an IP address
+        # and can syslog/nfsmount, etc Note we know the fields from the
+        # target's configuration, as they are pre-assigned
+        #
+        # <client-ip>:<server-ip>:<gw-ip>:<netmask>:<hostname>:<device>:<autoconf>:<dns0-ip>:<dns1-ip>:<ntp0-ip>
+        config = """\
+say TCF Network boot to Service OS
+#serial 0 115200
 default boot
 prompt 0
 label boot
   # boot to %(boot_domain)s
   linux %(http_url_prefix)svmlinuz-%(boot_domain)s
-  append console=ttyS0 console=ttyUSB0 console=tty0 \
+  append console=tty0 console=ttyUSB0,115200 \
     ip=%(ipv4_addr)s::%(ipv4_gateway)s:%(ipv4_netmask)s:%(name)s::off:%(ipv4_gateway)s \
     root=%(root_dev)s %(extra_kopts)s
 """
+    elif domain == 'elf':
+        config = """\
+say TCF Network boot booting ELF file
+serial 0 115200
+default boot
+prompt 0
+label boot
+  kernel elf.c32
+  append kernel.elf
+"""
+    else:
+        config = """\
+say TCF Network boot redirecting to local boot
+serial 0 115200
+default localboot
+prompt 0
+label localboot
+  localboot 0
+"""
+
     # FIXME:
     #
     # if there are substitution fields in the config text,
@@ -494,7 +538,7 @@ label boot
         if count > 9:
             raise RuntimeError('after ten iterations could not resolve '
                                'all configuration keywords')
-    
+
     with open(file_name, "w") as tf:
         tf.write(config)
         tf.flush()
