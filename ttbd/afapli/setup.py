@@ -11,7 +11,6 @@
 # VERSION=$(git describe) python ./setup.py bdist_rpm
 #
 #
-import fileinput
 import os
 
 import distutils
