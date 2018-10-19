@@ -68,7 +68,7 @@ if [ -z "$image_type" ]; then
             image_type=fedora;;
         *rootfs.wic)
             image_type=rootfswic;;
-       
+
         *)
             error Unknown image type for $image_file
             help 1>&2
@@ -92,7 +92,7 @@ case "$image_type" in
     rootfswic)
         root_part=p2
         ;;
-   
+
     *)
         error Unknown image type for $image_file
         help 1>&2
@@ -156,13 +156,13 @@ case $image_type in
         info $image_type: force settings of ttyUSB0 console
         sudo chroot $destdir systemctl enable serial-getty@ttyUSB0
         info $image_type: force enabling ttyUSB0 console
-        ;;
-    clear)
-        # Harcode: disable ANSI script sequences, as they make
-        # scripting way harder
-        sudo sed -i 's/^export PS1=.*/export PS1="\\u@\\H \\w $endchar "/' \
-            $destdir/usr/share/defaults/etc/profile.d/50-prompt.sh 
-        info $image_type: disable ANSI coloring in prompt, makes scripting harder
+        if [ $image_type == clear ]; then
+            # Harcode: disable ANSI script sequences, as they make
+            # scripting way harder
+            sudo sed -i 's/^export PS1=.*/export PS1="\\u@\\H \\w $endchar "/' \
+                 $destdir/usr/share/defaults/etc/profile.d/50-prompt.sh
+            info $image_type: disable ANSI coloring in prompt, makes scripting harder
+        fi
         ;;
     yocto)
         echo 'U0:12345:respawn:/bin/start_getty 115200 ttyUSB0 vt102' |
