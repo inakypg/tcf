@@ -26,8 +26,7 @@ class aio(tcfl.tc.tc_c):
 
         ic.power.cycle()
         # Deploy
-        tcfl.tl.domain_deploy(ic, target, domain, domain,
-                              "/dev/sda", "/dev/sda5")
+        tcfl.tl.domain_deploy(ic, target, domain)
 
         # If there are errors, exceptions will come,but otherwise we
         # are here, still in the service OS, so reboot into our new OS
@@ -62,3 +61,6 @@ class aio(tcfl.tc.tc_c):
         # prompt; if it fails, this will raise an exception
         # FIXME: we need hooks to detect kernel panics, oopses, etc
         target.shell.run("echo I booted", "I booted")
+
+    def teardown(self):
+        tcfl.tl.console_dump_on_failure(self)
