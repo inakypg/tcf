@@ -13,6 +13,7 @@ import re
 
 import tcfl.tc
 import tcfl.tl
+import tcfl.pos
 
 domain = os.environ.get("DOMAIN")
 
@@ -26,7 +27,7 @@ class aio(tcfl.tc.tc_c):
 
         ic.power.cycle()
         # Deploy
-        tcfl.tl.domain_deploy(ic, target, domain)
+        tcfl.pos.deploy(ic, target, domain)
 
         # If there are errors, exceptions will come,but otherwise we
         # are here, still in the service OS, so reboot into our new OS

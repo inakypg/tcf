@@ -6,7 +6,7 @@
 #
 
 """
-Common utilities for test cases
+Utilities for flashing PC-Class devices with a Linux based Provisioning OS
 """
 
 import operator
@@ -19,199 +19,7 @@ import Levenshtein
 
 import tcfl.tc
 
-#! Place where the Zephyr tree is located
-# Note we default to empty string so it can be pased
-ZEPHYR_BASE = os.environ.get(
-    'ZEPHYR_BASE',
-    '__environment_variable_ZEPHYR_BASE__not_exported__')
-
-def zephyr_tags():
-    """
-    Evaluate the build environment and make sure all it is needed to
-    build Zephyr apps is in place.
-
-    If not, return a dictionary defining a *skip* tag with the reason
-    that can be fed directly to decorator :func:`tcfl.tc.tags`; usage:
-
-    >>> import tcfl.tc
-    >>> import qal
-    >>>
-    >>> @tcfl.tc.tags(**qal.zephyr_tests_tags())
-    >>> class some_test(tcfl.tc.tc_c):
-    >>>     ...
-    """
-    tags = {}
-    zephyr_vars = set([ 'ZEPHYR_BASE', 'ZEPHYR_GCC_VARIANT',
-                        'ZEPHYR_TOOLCHAIN_VARIANT' ])
-    zephyr_vars_missing = zephyr_vars - set(os.environ.keys())
-    if 'ZEPHYR_GCC_VARIANT' in zephyr_vars_missing \
-       and 'ZEPHYR_TOOLCHAIN_VARIANT' in set(os.environ.keys()):
-        # ZEPHYR_GCC_VARIANT deprecated -- always remove it
-        # TOOLCHAIN_VARIANT (the new form) is set
-        zephyr_vars_missing.remove('ZEPHYR_GCC_VARIANT')
-    if zephyr_vars_missing:
-        tags['skip'] = ",".join(zephyr_vars_missing) + " not exported"
-    return tags
-
-
-def console_dump_on_failure(testcase):
-    """
-    If a testcase has errored, failed or blocked, dump the consoles of
-    all the targets.
-
-    :param tcfl.tc.tc_c testcase: testcase whose targets' consoles we
-      want to dump
-
-    Usage: in a testcase's teardown function:
-
-    >>> import tcfl.tc
-    >>> import tcfl.tl
-    >>>
-    >>> class some_test(tcfl.tc.tc_c):
-    >>>     ...
-    >>>
-    >>>     def teardown_SOMETHING(self):
-    >>>         tcfl.tl.console_dump_on_failure(self)
-    """
-    assert isinstance(testcase, tcfl.tc.tc_c)
-    if not testcase.result_eval.failed \
-       and not testcase.result_eval.errors \
-       and not testcase.result_eval.blocked:
-        return
-    for target in testcase.targets.values():
-        if not hasattr(target, "console"):
-            continue
-        if testcase.result_eval.failed:
-            reporter = target.report_fail
-            reporter("console dump due to failure")
-        elif testcase.result_eval.errors:
-            reporter = target.report_error
-            reporter("console dump due to errors")
-        else:
-            reporter = target.report_blck
-            reporter("console dump due to blockage")
-        for line in target.console.read().split('\n'):
-            reporter("console: " + line.strip())
-
-
-def setup_verify_slip_feature(zephyr_client, zephyr_server, _ZEPHYR_BASE):
-    """
-    The Zephyr kernel we use needs to support
-    CONFIG_SLIP_MAC_ADDR, so if any of the targets needs SLIP
-    support, make sure that feature is Kconfigurable
-    Note we do this after building, because we need the full
-    target's configuration file.
-
-    :param tcfl.tc.target_c zephyr_client: Client Zephyr target
-
-    :param tcfl.tc.target_c zephyr_server: Client Server target
-
-    :param str _ZEPHYR_BASE: Path of Zephyr source code
-
-    Usage: in a testcase's setup methods, before building Zephyr code:
-
-    >>>     @staticmethod
-    >>>     def setup_SOMETHING(zephyr_client, zephyr_server):
-    >>>         tcfl.tl.setup_verify_slip_feature(zephyr_client, zephyr_server,
-                                                  tcfl.tl.ZEPHYR_BASE)
-
-    Look for a complete example in
-    :download:`../examples/test_network_linux_zephyr_echo.py`.
-    """
-    assert isinstance(zephyr_client, tcfl.tc.target_c)
-    assert isinstance(zephyr_server, tcfl.tc.target_c)
-    client_cfg = zephyr_client.zephyr.config_file_read()
-    server_cfg = zephyr_server.zephyr.config_file_read()
-    slip_mac_addr_found = False
-    for file_name in [
-            os.path.join(_ZEPHYR_BASE, "drivers", "net", "Kconfig"),
-            os.path.join(_ZEPHYR_BASE, "drivers", "slip", "Kconfig"),
-    ]:
-        if os.path.exists(file_name):
-            with open(file_name, "r") as f:
-                if "SLIP_MAC_ADDR" in f.read():
-                    slip_mac_addr_found = True
-
-    if ('CONFIG_SLIP' in client_cfg or 'CONFIG_SLIP' in server_cfg) \
-       and not slip_mac_addr_found:
-        raise tcfl.tc.blocked_e(
-            "Can't test: your Zephyr kernel in %s lacks support for "
-            "setting the SLIP MAC address via configuration "
-            "(CONFIG_SLIP_MAC_ADDR) -- please upgrade"
-            % _ZEPHYR_BASE, dict(dlevel = -1)
-        )
-
-def teardown_targets_power_off(testcase):
-    """
-    Power off all the targets used on a testcase.
-
-    :param tcfl.tc.tc_c testcase: testcase whose targets we are to
-      power off.
-
-    Usage: in a testcase's teardown function:
-
-    >>> import tcfl.tc
-    >>> import tcfl.tl
-    >>>
-    >>> class some_test(tcfl.tc.tc_c):
-    >>>     ...
-    >>>
-    >>>     def teardown_SOMETHING(self):
-    >>>         tcfl.tl.teardown_targets_power_off(self)
-
-    Note this is usually not necessary as the daemon will power off
-    the targets when cleaning them up; usually when a testcase fails,
-    you want to keep them on to be able to inspect them.
-    """
-    assert isinstance(testcase, tcfl.tc.tc_c)
-    for dummy_twn, target  in reversed(list(testcase.targets.iteritems())):
-        target.power.off()
-
-def tcpdump_enable(ic):
-    """
-    Ask an interconnect to capture IP traffic with TCPDUMP
-
-    Note this is only possible if the server to which the interconnect
-    is attached has access to it; if the interconnect is based on the
-    :class:vlan_pci driver, it will support it.
-
-    Note the interconnect *must be* power cycled after this for the
-    setting to take effect. Normally you do this in the *start* method
-    of a multi-target testcase
-
-    >>> def start(self, ic, server, client):
-    >>>    tcfl.tl.tcpdump_enable(ic)
-    >>>    ic.power.cycle()
-    >>>    ...
-    """
-    assert isinstance(ic, tcfl.tc.target_c)
-    ic.property_set('tcpdump', ic.kws['tc_hash'] + ".cap")
-
-
-def tcpdump_collect(ic, filename = None):
-    """
-    Collects from an interconnect target the tcpdump capture
-
-    .. warning: this will power off the interconnect!
-
-    :param tcfl.tc.target_c ic: interconnect target
-    :param str filename: (optional) name of the local file where to
-        copy the tcpdump data to; defaults to
-        *report-RUNID:HASHID-REP.tcpdump* (where REP is the repetition
-        count)
-    """
-    assert isinstance(ic, tcfl.tc.target_c)
-    assert filename == None or isinstance(filename, basestring)
-    if filename == None:
-        filename = \
-            "report-%(runid)s:%(tc_hash)s" % ic.kws \
-            + "-%d" % (ic.testcase.eval_count + 1) \
-            + ".tcpdump"
-    ic.power.off()		# ensure tcpdump flushes
-    ic.broker_files.dnload(ic.kws['tc_hash'] + ".cap", filename)
-    ic.report_info("tcpdump available in file %s" % filename)
-
-def pos_partition(target, device):
+def partition(target, device):
     # /dev/SOMETHING to -> SOMETHING
     device_basename = os.path.basename(device)
 
@@ -291,7 +99,7 @@ mkpart primary ext4 %(swap_end)s %(scratch_end)s \
     target.shell.run("mkswap -L tcf-swap " + swap_dev)
     target.shell.run("mkfs.ext4 -FqL tcf-scratch " + home_dev)
 
-def _pos_linux_guess_from_lecs(target):
+def _linux_boot_guess_from_lecs(target):
     """
     Setup a Linux kernel to boot using Gumniboot
     """
@@ -349,7 +157,7 @@ def _pos_linux_guess_from_lecs(target):
 
     return kernel, initrd, options
 
-def _pos_linux_guess_from_boot(target):
+def _linux_boot_guess_from_boot(target):
     """
     Given a list of files (normally) in /boot, decide which ones are
     Linux kernels and initramfs; select the latest version
@@ -388,19 +196,19 @@ def _pos_linux_guess_from_boot(target):
     else:
         return None, None, ""
 
-def _pos_linux_guess(target):
+def _linux_boot_guess(target):
     """
     Setup a Linux kernel to boot using Gumniboot
     """
-    kernel, initrd, options = _pos_linux_guess_from_lecs(target)
+    kernel, initrd, options = _linux_boot_guess_from_lecs(target)
     if kernel:
         return kernel, initrd, options
-    kernel, initrd, options = _pos_linux_guess_from_boot(target)
+    kernel, initrd, options = _linux_boot_guess_from_boot(target)
     if kernel:
         return kernel, initrd, options
     return None, None, None
 
-def _pos_efibootmgr_setup(target):
+def _efibootmgr_setup(target):
     # Now make sure the new entry is after IPv4, as we use IPv4's boot
     # to redirect to the POS or to localboot
     #
@@ -462,10 +270,10 @@ def _pos_efibootmgr_setup(target):
     target.shell.run("efibootmgr -n " + lbm)
 
 
-def pos_boot_config(target, root_part_dev,
-                    linux_kernel_file = None,
-                    linux_initrd_file = None,
-                    linux_options = None):
+def boot_config(target, root_part_dev,
+                linux_kernel_file = None,
+                linux_initrd_file = None,
+                linux_options = None):
     boot_dev = target.kws['pos_boot_dev']
     # were we have mounted the root partition
     root_dir = "/mnt"
@@ -473,7 +281,7 @@ def pos_boot_config(target, root_part_dev,
     # If we didn't specify a Linux kernel, try to guess
     if linux_kernel_file == None:
         linux_kernel_file, _linux_initrd_file, _linux_options = \
-            _pos_linux_guess(target)
+            _linux_boot_guess(target)
     if linux_initrd_file == None:
         linux_initrd_file = _linux_initrd_file
     if linux_options == None:
@@ -610,16 +418,16 @@ EOF
     # Now mess with the EFIbootmgr
     # FIXME: make this a function and a configuration option (if the
     # target does efibootmgr)
-    _pos_efibootmgr_setup(target)
+    _efibootmgr_setup(target)
     # umount only if things go well
     # Shall we try to unmount in case of error? nope, we are going to
     # have to redo the whole thing anyway, so do not touch it, in case
     # we are jumping in for manual debugging
     target.shell.run("umount /dev/%(boot_part_dev)s" % kws)
 
-def _pos_seed_match(lp, goal):
+def _seed_match(lp, goal):
     """
-    Given two seed specifications, return the most similar one
+    Given two image/seed specifications, return the most similar one
 
     >>> lp = {
     >>>     'part1': 'clear:live:25550::x86-64',
@@ -628,7 +436,7 @@ def _pos_seed_match(lp, goal):
     >>>     'part4': 'rtk::90',
     >>>     'part5': 'rtk::114',
     >>> }
-    >>> _pos_seed_match(lp, "rtk::112")
+    >>> _seed_match(lp, "rtk::112")
     >>> ('part5', 0.933333333333, 'rtk::114')
 
     """
@@ -666,11 +474,180 @@ def _pos_seed_match(lp, goal):
     selected, score = max(scores.iteritems(), key = operator.itemgetter(1))
     return selected, score, lp[selected]
 
-def domain_deploy(ic, target, domain, domain_version,
-                  boot_dev = None, root_dev = None,
-                  boot_domain_service = "service",
-                  sos_prompt = None,
-                  partitioning_fn = pos_partition,
-                  mkfs_cmd = "mkfs.ext4 -j %(root_dev)s"):
-    target.report_info("DEPRECATED! use tcfl.pos.deploy", level = 0)
-    tcfl.pos.deploy(ic, target, domain_version, boot_dev, root_dev)
+def deploy(ic, target, domain,
+           # FIXME: ideally these could be defaulted
+           boot_dev = None, root_dev = None,
+           boot_domain_service = "service",
+           sos_prompt = None,
+           partitioning_fn = partition,
+           mkfs_cmd = "mkfs.ext4 -j %(root_dev)s"):
+
+    """
+    Deploy a domain to a target using the Provisioning OS
+
+    :param str boot_dev: (optional) which is the boot device to use,
+      where the boot loader needs to be installed in a boot
+      partition. e.g.: ``sda`` for */dev/sda* or ``mmcblk01`` for
+      */dev/mmcblk01*.
+
+      Defaults to the value of the ``pos_boot_dev`` tag.
+
+    Domain spec DOMAIN:SPIN:VERSION:SUBVERSION:SUBVERSION
+
+    FIXME:
+     - fix to autologing serial console?
+     - do a couple retries if fails?
+     - increase in property bd.stats.client.sos_boot_failures and
+       bd.stats.client.sos_boot_count (to get a baseline_
+     - tag bd.stats.last_reset to DATE
+    Note: you might want the interconnect power cycled
+
+    """
+    testcase = target.testcase
+
+    # What is our boot device?
+    if boot_dev:
+        assert isinstance(boot_dev, basestring), 'boot_dev must be a string'
+    else:
+        boot_dev = target.kws.get('pos_boot_dev', None)
+        if boot_dev == None:
+            raise tcfl.tc.blocked_e(
+                "Can't guess boot_dev (no `pos_boot_dev` tag available)",
+                { 'target': target } )
+    boot_dev = "/dev/" + boot_dev
+
+    # what is out root device?
+    if root_dev:
+        assert isinstance(root_dev, basestring), 'root_dev must be a string'
+    else:
+        # HACK: /dev/[hs]d* do partitions as /dev/[hs]dN, where as mmc and
+        # friends add /dev/mmcWHATEVERpN. Seriously...
+        device = boot_dev
+        if device.startswith("/dev/hd") \
+           or device.startswith("/dev/sd") \
+           or device.startswith("/dev/vd"):
+            target.kws['p_prefix'] = ""
+        else:
+            target.kws['p_prefix'] = "p"
+
+        partl = {}
+        empties = []
+        for tag, value in target.rt.iteritems():
+            if not tag.startswith("pos_root_"):
+                continue
+            dev_basename = tag.replace("pos_root_", "")
+            dev_name = "/dev/" + dev_basename
+            if value == 'EMPTY':
+                empties.append(dev_name)
+            else:
+                partl[dev_name] = value
+
+        root_part_dev, score, seed = _seed_match(partl, domain)
+        if score == 0:
+            # none is a good match, find an empty one...if there are
+            # non empty, just any
+            if empties:
+                root_part_dev = random.choice(empties)
+                target.report_info("%s: picked up empty root partition"
+                                   % root_part_dev)
+            else:
+                # FIXME: collect least-used partition data?
+                root_part_dev = random.choice(partl.keys())
+                target.report_info(
+                    "%s: picked up random partition because none of the "
+                    "existing installed ones was a good match and there "
+                    "are no empty ones" % root_part_dev)
+        else:
+            target.report_info("picked up root partition %s for %s "
+                               "due to a %.02f similarity with %s"
+                               % (root_part_dev, seed, score, seed))
+    # FIXME: check ic is powered on?
+    target.report_info("rebooting into service domain for flashing")
+    target.property_set("boot_domain", boot_domain_service)
+    target.power.cycle()
+
+    # Sequence for TCF-live based on Fedora
+    if sos_prompt:
+        target.shell.linux_shell_prompt_regex = sos_prompt
+    target.shell.up()
+
+    # FIXME: use default dict?
+    root_part_dev_base = os.path.basename(root_part_dev)
+    kws = dict(
+        rsync_server = ic.kws['ipv4_addr'],
+        domain = domain,
+        boot_dev = boot_dev,
+        root_part_dev = root_part_dev,
+        root_part_dev_base = root_part_dev_base,
+    )
+
+    # FIXME: verify root partitioning is the right one and recover if
+    # not
+    try:
+        # FIXME: act on failing, just reformat and retry, then
+        # bail out on failure
+        target.report_info("mounting /mnt to image")
+        for _try_count in range(3):
+            # don't let it fail or it will raise an exception, so we
+            # print FAILED in that case to look for stuff; note the
+            # double apostrophe trick so the regex finder doens't trip
+            # on the command
+            output = target.shell.run(
+                "mount %(root_part_dev)s /mnt || echo FAI''LED" % kws,
+                output = True)
+            # What did we get?
+            if 'FAILED' in output:
+                if 'mount: /mnt: special device ' + root_part_dev \
+                   + ' does not exist.' in output:
+                    partitioning_fn(target, boot_dev)
+                elif 'mount: /mnt: wrong fs type, bad option, ' \
+                   'bad superblock on ' + root_part_dev + ', missing ' \
+                   'codepage or helper program, or other error.' in output:
+                    # ok, this means probably the partitions are not
+                    # formatted; FIXME: support other filesystemmakeing?
+                    target.shell.run(mkfs_cmd % kws)
+                else:
+                    raise tcfl.tc.blocked_e(
+                        "Can't recover unknown error condition: %s" % output,
+                        dict(target = target))
+            else:
+                target.report_info("mounted /mnt to image")
+                break	# it worked, we are done
+            # fall through, retry
+        else:
+            raise tcfl.tc.blocked_e(
+                "Tried to deploy too many times and failed",
+                dict(target = target))
+        if domain:
+            target.report_info("rsyncing seed %(domain)s from "
+                               "%(rsync_server)s to /mnt" % kws)
+            try:
+                original_timeout = testcase.expecter.timeout
+                testcase.expecter.timeout = 800
+                target.shell.run(
+                    "time rsync -aX --numeric-ids --delete "
+                    "%(rsync_server)s::images/%(domain)s/. /mnt/."
+                    % kws)
+                target.property_set('pos_root_' + root_part_dev_base, domain)
+            finally:
+                testcase.expecter.timeout = original_timeout
+
+            # Configure the bootloader
+            #
+            # We do it by hand -- with shell commands, so it is
+            # easy to reproduce by a user typing them
+
+            # FIXME: we are EFI only for now, way easier
+            # Make sure we have all the entries for systemd-loader
+            boot_config(target, root_part_dev_base)
+        target.shell.run("sync")
+        # Now setup the local boot loader to boot off that
+        target.property_set("boot_domain", domain)
+    except Exception as e:
+        target.report_info("BUG? exception %s: %s %s" %
+                           (type(e).__name__, e, traceback.format_exc()))
+        raise
+    finally:
+        target.shell.run("umount /mnt")
+
+    target.report_info("deployed %(domain)s to %(root_part_dev)s" % kws)
