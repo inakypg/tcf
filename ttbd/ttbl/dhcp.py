@@ -388,7 +388,7 @@ subnet6 %(if_net)s/%(if_len)s {
 def tftp_service_domain_os_power_on_pre(target, kws):
     """
     We are called before power on
-    
+
     We will write a TFTP configuration file for the mac
     """
 
@@ -409,7 +409,7 @@ def power_on_pre_boot_domain_setup(target):
     # - use the kws to initialize files and stuff
     #
     # - we need a name for this mechanism
-    
+
     kws = {}
     domain = target.fsdb.get("boot_domain")
     if domain == None:
@@ -425,26 +425,28 @@ def power_on_pre_boot_domain_setup(target):
         raise RuntimeError('this target does not belong to the '
                            'boot interconnect "%s" defined in tag '
                            '"boot_interconnect"' % boot_ic)
-    
+
     interconnect = target.tags['interconnects'][boot_ic]
-    mac_addr = interconnect['mac_addr']
+
+    # now this is dirty -- we kinda hacking here but otherwise, how do
+    # we get to the pos_* kws?
+    boot_ic_tags = ttbl.config.targets[boot_ic].tags
 
     # The service
-    kws = dict(
+    kws = dict(target.tags)
+    kws.update(dict(
         # FIXME: ttbd server's IP address in nwa
         # FIXME: booting over TFTP
-        http_url_prefix = "http://192.168.97.1/ttbd-staging/",
         ipv4_addr = interconnect['ipv4_addr'],
-        #target_ipv4_gateway = interconnect['something']
-        ipv4_gateway = "192.168.97.1",	# FIXME
-        # FIXME compute from addr_len
-        ipv4_netmask = "255.255.255.0",
+        ipv4_gateway = interconnect.get('ipv4_gateway', ""),
+        ipv4_netmask = commonl.ipv4_len_to_netmask_ascii(
+            interconnect['ipv4_prefix_len']),
         mac_addr = interconnect['mac_addr'],
         name = target.id,
-        nfs_server = "192.168.97.1",				# FIXME
-        # FIXME: have the daemon hide the internal path?
-        nfs_path = "/home/ttbd/images/%(boot_domain)s",
-    )
+        pos_http_url_prefix = boot_ic_tags['pos_http_url_prefix'],
+        pos_nfs_server = boot_ic_tags['pos_nfs_server'],
+        pos_nfs_path = boot_ic_tags['pos_nfs_path'],
+    ))
 
     kws['extra_kopts'] = ""
     if domain == 'service':
@@ -453,8 +455,8 @@ def power_on_pre_boot_domain_setup(target):
         # no 'single' so it force starts getty
         # nfsroot: note we use UDP, so it is more resilitent to issues
         kws['extra_kopts'] += \
-            "initrd=%(http_url_prefix)sinitramfs-%(boot_domain)s " \
-            "nfsroot=%(nfs_server)s:%(nfs_path)s,udp,soft " \
+            "initrd=%(pos_http_url_prefix)sinitramfs-%(boot_domain)s " \
+            "nfsroot=%(pos_nfs_server)s:%(pos_nfs_path)s,udp,soft " \
             "rd.live.image selinux=0 audit=0 ro " \
             "rd.luks=0 rd.lvm=0 rd.md=0 rd.dm=0 rd.multipath=0 " \
             "plymouth.enable=0 "
@@ -499,8 +501,8 @@ default boot
 prompt 0
 label boot
   # boot to %(boot_domain)s
-  linux %(http_url_prefix)svmlinuz-%(boot_domain)s
-  append console=tty0 console=ttyUSB0,115200 \
+  linux %(pos_http_url_prefix)svmlinuz-%(boot_domain)s
+  append console=tty0 console=%(linux_serial_console_default)s,115200 \
     ip=%(ipv4_addr)s::%(ipv4_gateway)s:%(ipv4_netmask)s:%(name)s::off:%(ipv4_gateway)s \
     root=%(root_dev)s %(extra_kopts)s
 """
