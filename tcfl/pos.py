@@ -296,6 +296,11 @@ def boot_config(target, root_part_dev,
     if linux_initrd_file and os.path.isabs(linux_initrd_file):
         linux_initrd_file = linux_initrd_file[1:]
 
+    if linux_options == None or linux_options == "":
+        target.report_info("WARNING! can't figure out Linux cmdline "
+                           "options, taking defaults")
+        # below we'll add more stuff
+        linux_options = "console=tty0 root=SOMEWHERE"
 
     # /boot EFI system partition is always /dev/DEVNAME1 (first
     # partition), we partition like that
@@ -475,15 +480,23 @@ def _seed_match(lp, goal):
     return selected, score, lp[selected]
 
 def deploy(ic, target, domain,
-           # FIXME: ideally these could be defaulted
-           boot_dev = None, root_dev = None,
-           boot_domain_service = "service",
-           sos_prompt = None,
+           boot_dev = None, root_part_dev = None,
            partitioning_fn = partition,
-           mkfs_cmd = "mkfs.ext4 -j %(root_dev)s"):
+           extra_deploy_fns = [],
+           mkfs_cmd = "mkfs.ext4 -j %(root_dev)s",
+           pos_name = "service",
+           pos_prompt = None):
 
-    """
-    Deploy a domain to a target using the Provisioning OS
+    """Deploy a domain to a target using the Provisioning OS
+
+    :param tcfl.tc.tc_c ic: interconnect off which we are booting the
+      Provisioning OS and to which ``target`` is connected.
+
+    :param tcfl.tc.tc_c target: target which we are provisioning.
+
+    :param str domain: domain is an image available in an rsync server
+      specified in the interconnect's ``pos_rsync_server`` tag. Each
+      image is specified as ``IMAGE:SPIN:VERSION:SUBVERSION:ARCH``.
 
     :param str boot_dev: (optional) which is the boot device to use,
       where the boot loader needs to be installed in a boot
@@ -492,7 +505,23 @@ def deploy(ic, target, domain,
 
       Defaults to the value of the ``pos_boot_dev`` tag.
 
-    Domain spec DOMAIN:SPIN:VERSION:SUBVERSION:SUBVERSION
+    :param str root_part_dev: (optional) which is the device to use
+      for the root partition. e.g: ``mmcblk0p4`` for
+      */dev/mmcblk0p4* or ``hda5`` for */dev/hda5*.
+
+      If not specified, the system will pick up one from all the
+      different root partitions that are available, trying to select
+      the one that has the most similar to what we are installing to
+      minimize the install time.
+
+    :param list extra_deploy_fns: list of functions to call after the
+      domain has been deployed. e.g.:
+
+      >>> def pos_deploy_linux_kernel(ic, target, kws, kernel_file = None):
+      >>>     ...
+
+      the function will be passed keywords which contain values found
+      out during this execution
 
     FIXME:
      - fix to autologing serial console?
@@ -503,6 +532,14 @@ def deploy(ic, target, domain,
     Note: you might want the interconnect power cycled
 
     """
+    assert isinstance(ic, tcfl.tc.target_c), \
+        "ic must be an instance of tcfl.tc.target_c, but found %s" \
+        % type(ic).__name__
+    assert isinstance(target, tcfl.tc.target_c), \
+        "target must be an instance of tcfl.tc.target_c, but found %s" \
+        % type(target).__name__
+    assert isinstance(domain, basestring)
+
     testcase = target.testcase
 
     # What is our boot device?
@@ -517,8 +554,9 @@ def deploy(ic, target, domain,
     boot_dev = "/dev/" + boot_dev
 
     # what is out root device?
-    if root_dev:
-        assert isinstance(root_dev, basestring), 'root_dev must be a string'
+    if root_part_dev:
+        assert isinstance(root_part_dev, basestring), \
+            'root_part_dev must be a string'
     else:
         # HACK: /dev/[hs]d* do partitions as /dev/[hs]dN, where as mmc and
         # friends add /dev/mmcWHATEVERpN. Seriously...
@@ -526,9 +564,9 @@ def deploy(ic, target, domain,
         if device.startswith("/dev/hd") \
            or device.startswith("/dev/sd") \
            or device.startswith("/dev/vd"):
-            target.kws['p_prefix'] = ""
+            target.kw_set('p_prefix', "")
         else:
-            target.kws['p_prefix'] = "p"
+            target.kw_set('p_prefix', "p")
 
         partl = {}
         empties = []
@@ -563,23 +601,25 @@ def deploy(ic, target, domain,
                                % (root_part_dev, seed, score, seed))
     # FIXME: check ic is powered on?
     target.report_info("rebooting into service domain for flashing")
-    target.property_set("boot_domain", boot_domain_service)
+    # FIXME: rename boot_domain to pos or sth like that
+    target.property_set("boot_domain", pos_name)
     target.power.cycle()
 
     # Sequence for TCF-live based on Fedora
-    if sos_prompt:
-        target.shell.linux_shell_prompt_regex = sos_prompt
+    if pos_prompt:
+        target.shell.linux_shell_prompt_regex = pos_prompt
     target.shell.up()
 
     # FIXME: use default dict?
     root_part_dev_base = os.path.basename(root_part_dev)
     kws = dict(
-        rsync_server = ic.kws['ipv4_addr'],
+        rsync_server = ic.kws['pos_rsync_server'],
         domain = domain,
         boot_dev = boot_dev,
         root_part_dev = root_part_dev,
         root_part_dev_base = root_part_dev_base,
     )
+    kws.update(target.kws)
 
     # FIXME: verify root partitioning is the right one and recover if
     # not
@@ -625,12 +665,17 @@ def deploy(ic, target, domain,
                 original_timeout = testcase.expecter.timeout
                 testcase.expecter.timeout = 800
                 target.shell.run(
-                    "time rsync -aX --numeric-ids --delete "
-                    "%(rsync_server)s::images/%(domain)s/. /mnt/."
+                    "time rsync -aAX --numeric-ids --delete "
+                    "--exclude='/keepers/*' "
+                    "%(rsync_server)s/%(domain)s/. /mnt/."
                     % kws)
                 target.property_set('pos_root_' + root_part_dev_base, domain)
             finally:
                 testcase.expecter.timeout = original_timeout
+
+            # did the user provide an extra function to deploy stuff?
+            for extra_deploy_fn in extra_deploy_fns:
+                extra_deploy_fn(ic, target, kws)
 
             # Configure the bootloader
             #
