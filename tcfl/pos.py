@@ -696,3 +696,93 @@ def deploy(ic, target, domain,
         target.shell.run("umount /mnt")
 
     target.report_info("deployed %(domain)s to %(root_part_dev)s" % kws)
+
+def deploy_linux_kernel(ic, target, _kws):
+    """Deploy a linux kernel tree in the local machine to the target's
+    root filesystem
+
+    This is normally given to :func:`tcfl.pos.deploy` as:
+
+    >>> target.kw_set("pos_deploy_linux_kernel", SOMELOCALLOCATION)
+    >>> tcfl.pos.deploy(ic, target, IMAGENAME,
+    >>>                 extra_deploy_fns = [ tcfl.pos.deploy_linux_kernel ])
+
+    as it expects ``kws['pos_deploy_linux_kernel']`` which points to a
+    local directory in the form::
+
+      - boot/*
+      - lib/modules/KVER/*
+
+    all those will be rsynced to the target's persistent root area
+    (for speed) and from there to the root filesystem's /boot and
+    /lib/modules. Anything else in the ``/boot/`` and
+    ``/lib/modules/`` directories will be replaced with what comes
+    from the *kernel tree*.
+
+    **Low level details**
+
+    When the target's image has been flashed in place,
+    :func:`tcfl.pos.deploy` is asked to call this function.
+
+    The client will rsync the tree from the local machine to the
+    persistent space in the target's selected root partition (which is
+    not overriden by :func:`tcfl.pos.deploy`). For that it needs to
+    establish a TCPv4 tunnel to the target; the target is then made to
+    serve rsync over that tunnel for the client to transfer the tree.
+
+    The tree is first transferred to the persistent space so if there
+    are multiple flashings done for the same versions, then the
+    transfers will be way faster in the subsequent times.
+
+    After there, the client will have the target rsync from the
+    persistant space to the final destination (which is overriden by
+    :func:`tcfl.pos.deploy`).
+    """
+    target.report_info("deploying linux kernel", level = 0)
+
+    # The target is running the Provisioning OS
+    # Start rsync in the target to receive the stuff we want to send to it
+    # folders that have root-only weird permissions; detach it
+    target.shell.run("""\
+cat > /tmp/rsync.conf <<EOF
+[rootfs]
+use chroot = true
+path = /mnt/
+read only = false
+timeout = 60
+uid = root
+gid = root
+EOF""")
+    target.shell.run("rsync --port 3000 --daemon --config /tmp/rsync.conf")
+    target.tunnel.ip_addr = target.addr_get(ic, "ipv4")
+    target.kw_set('rsync_port', target.tunnel.add(3000))
+    target.kw_set('rsync_server', target.rtb.parsed_url.hostname)
+    # Now we rsync from here (clienting) to the target (serving)
+    # because heck no we are not making this test runner the
+    # server so we can open up to attack from the target.
+    #
+    # Note we sync with --delete to remove anything from /boot
+    # and /lib/modules/. we are not sending; this allows later the
+    # boot configuration code to find only one kernel and boot
+    # that.
+    target.report_info("rsyncing boot/ to target")
+    # make sure we have spots in the keeper are where we'll put
+    # out stuff so it is faster to upload repeatedly
+    target.shell.run('mkdir -p /mnt/keepers/boot '
+                     '/mnt/keepers/lib/modules')
+    # upload the kernel to the keeper area
+    target.shcmd_local(
+        "time rsync -aAX --numeric-ids --delete --port %(rsync_port)s "
+        "%(pos_deploy_linux_kernel_tree)s/boot/. "
+        "%(rsync_server)s::rootfs/keepers/boot/.")
+    target.report_info("rsyncing lib/modules to target")
+    target.shcmd_local(
+        "time rsync -aAX --numeric-ids --delete --port %(rsync_port)s "
+        "%(pos_deploy_linux_kernel_tree)s/lib/modules/. "
+        "%(rsync_server)s::rootfs/keepers/lib/modules/.")
+    # Now move it from the keeper area to its final location
+    target.shell.run(
+        "rsync -aAX --delete /mnt/keepers/boot/. /mnt/boot/.")
+    target.shell.run(
+        "rsync -aAX --delete /mnt/keepers/lib/modules/. /mnt/lib/modules/.")
+    target.report_pass("linux kernel transferred")
