@@ -15,11 +15,11 @@ import tcfl.tc
 import tcfl.tl
 import tcfl.pos
 
-image = os.environ["DOMAIN"]
+image = os.environ["IMAGE"]
 
 @tcfl.tc.interconnect("ipv4_addr")
 @tcfl.tc.target('linux and boot_interconnect')
-class deploy(tcfl.tc.tc_c):
+class aio(tcfl.tc.tc_c):
 
     # FIXME move to deploy phase; need to fix things in tc.py so we
     # can use the expecter

@@ -384,7 +384,7 @@ swap. Partition 3 is dedicated to home/scratch, which can be wiped
 and reset everytime a new test is run.
 
 Partitions 4-on are different root filesystems which can be reused by
-the system as needed for booting different domains (aka: distros
+the system as needed for booting different images (aka: distros
 configured in particular ways).
 EOF
     """)
@@ -479,24 +479,27 @@ def _seed_match(lp, goal):
     selected, score = max(scores.iteritems(), key = operator.itemgetter(1))
     return selected, score, lp[selected]
 
-def deploy(ic, target, domain,
-           boot_dev = None, root_part_dev = None,
-           partitioning_fn = partition,
-           extra_deploy_fns = [],
-           mkfs_cmd = "mkfs.ext4 -j %(root_dev)s",
-           pos_name = "service",
-           pos_prompt = None):
+def deploy_image(ic, target, image,
+                 boot_dev = None, root_part_dev = None,
+                 partitioning_fn = partition,
+                 extra_deploy_fns = [],
+                 mkfs_cmd = "mkfs.ext4 -j %(root_dev)s",
+                 pos_prompt = None):
 
-    """Deploy a domain to a target using the Provisioning OS
+    """Deploy an image to a target using the Provisioning OS
 
     :param tcfl.tc.tc_c ic: interconnect off which we are booting the
       Provisioning OS and to which ``target`` is connected.
 
     :param tcfl.tc.tc_c target: target which we are provisioning.
 
-    :param str domain: domain is an image available in an rsync server
+    :param str image: name of an image available in an rsync server
       specified in the interconnect's ``pos_rsync_server`` tag. Each
-      image is specified as ``IMAGE:SPIN:VERSION:SUBVERSION:ARCH``.
+      image is specified as ``IMAGE:SPIN:VERSION:SUBVERSION:ARCH``, e.g:
+
+      - fedora:workstation:28::x86_64
+      - clear:live:25550::x86_64
+      - yocto:core-image-minimal:2.5.1::x86
 
     :param str boot_dev: (optional) which is the boot device to use,
       where the boot loader needs to be installed in a boot
@@ -515,7 +518,7 @@ def deploy(ic, target, domain,
       minimize the install time.
 
     :param list extra_deploy_fns: list of functions to call after the
-      domain has been deployed. e.g.:
+      image has been deployed. e.g.:
 
       >>> def pos_deploy_linux_kernel(ic, target, kws, kernel_file = None):
       >>>     ...
@@ -538,7 +541,7 @@ def deploy(ic, target, domain,
     assert isinstance(target, tcfl.tc.target_c), \
         "target must be an instance of tcfl.tc.target_c, but found %s" \
         % type(target).__name__
-    assert isinstance(domain, basestring)
+    assert isinstance(image, basestring)
 
     testcase = target.testcase
 
@@ -580,7 +583,7 @@ def deploy(ic, target, domain,
             else:
                 partl[dev_name] = value
 
-        root_part_dev, score, seed = _seed_match(partl, domain)
+        root_part_dev, score, seed = _seed_match(partl, image)
         if score == 0:
             # none is a good match, find an empty one...if there are
             # non empty, just any
@@ -600,9 +603,8 @@ def deploy(ic, target, domain,
                                "due to a %.02f similarity with %s"
                                % (root_part_dev, seed, score, seed))
     # FIXME: check ic is powered on?
-    target.report_info("rebooting into service domain for flashing")
-    # FIXME: rename boot_domain to pos or sth like that
-    target.property_set("boot_domain", pos_name)
+    target.report_info("rebooting into POS for flashing")
+    target.property_set("pos_mode", "pxe")
     target.power.cycle()
 
     # Sequence for TCF-live based on Fedora
@@ -614,7 +616,7 @@ def deploy(ic, target, domain,
     root_part_dev_base = os.path.basename(root_part_dev)
     kws = dict(
         rsync_server = ic.kws['pos_rsync_server'],
-        domain = domain,
+        image = image,
         boot_dev = boot_dev,
         root_part_dev = root_part_dev,
         root_part_dev_base = root_part_dev_base,
@@ -658,8 +660,8 @@ def deploy(ic, target, domain,
             raise tcfl.tc.blocked_e(
                 "Tried to deploy too many times and failed",
                 dict(target = target))
-        if domain:
-            target.report_info("rsyncing seed %(domain)s from "
+        if image:
+            target.report_info("rsyncing seed %(image)s from "
                                "%(rsync_server)s to /mnt" % kws)
             try:
                 original_timeout = testcase.expecter.timeout
@@ -667,9 +669,9 @@ def deploy(ic, target, domain,
                 target.shell.run(
                     "time rsync -aAX --numeric-ids --delete "
                     "--exclude='/keepers/*' "
-                    "%(rsync_server)s/%(domain)s/. /mnt/."
+                    "%(rsync_server)s/%(image)s/. /mnt/."
                     % kws)
-                target.property_set('pos_root_' + root_part_dev_base, domain)
+                target.property_set('pos_root_' + root_part_dev_base, image)
             finally:
                 testcase.expecter.timeout = original_timeout
 
@@ -687,7 +689,7 @@ def deploy(ic, target, domain,
             boot_config(target, root_part_dev_base)
         target.shell.run("sync")
         # Now setup the local boot loader to boot off that
-        target.property_set("boot_domain", domain)
+        target.property_set("pos_mode", "local")
     except Exception as e:
         target.report_info("BUG? exception %s: %s %s" %
                            (type(e).__name__, e, traceback.format_exc()))
@@ -695,7 +697,7 @@ def deploy(ic, target, domain,
     finally:
         target.shell.run("umount /mnt")
 
-    target.report_info("deployed %(domain)s to %(root_part_dev)s" % kws)
+    target.report_info("deployed %(image)s to %(root_part_dev)s" % kws)
 
 def deploy_linux_kernel(ic, target, _kws):
     """Deploy a linux kernel tree in the local machine to the target's

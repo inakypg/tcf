@@ -385,22 +385,9 @@ subnet6 %(if_net)s/%(if_len)s {
             return False
 
 
-def tftp_service_domain_os_power_on_pre(target, kws):
-    """
-    We are called before power on
-
-    We will write a TFTP configuration file for the mac
-    """
-
-
-def power_on_pre_boot_domain_setup(target):
+def power_on_pre_pos_setup(target):
 
     # FIXME
-    #
-    # - tftp_boot_domain would be set as a property from the client to
-    #   decide what tftp_boot_domain to boot we can also use
-    #   properties to decide which vmlinuz/initrd and other boot
-    #   options to set (cmdline?)
     #
     # - set in tags which interconnect is used for booting?
     #
@@ -410,12 +397,16 @@ def power_on_pre_boot_domain_setup(target):
     #
     # - we need a name for this mechanism
 
-    kws = {}
-    domain = target.fsdb.get("boot_domain")
-    if domain == None:
-        # Not out deal, we don't know what to do, why are we here again?
-        raise RuntimeError('Can\'t select domain to boot due to missing '
-                           '"boot_domain" property')
+    pos_mode = target.fsdb.get("pos_mode")
+    if pos_mode == None:
+        target.log.info("POS boot: ignoring, pos_mode property not set")
+        return
+    # We only care if mode is set to pxe or local -- local makes us
+    # tell the thing to go boot local disk
+    if pos_mode != "pxe" and pos_mode != "local":
+        target.log.info("POS boot: ignoring, pos_mode set to %s "
+                        "(vs PXE or local)" % pos_mode)
+        return
 
     boot_ic = target.tags.get('boot_interconnect', None)
     if boot_ic == None:
@@ -427,35 +418,41 @@ def power_on_pre_boot_domain_setup(target):
                            '"boot_interconnect"' % boot_ic)
 
     interconnect = target.tags['interconnects'][boot_ic]
+    mac_addr = interconnect['mac_addr']
 
-    # now this is dirty -- we kinda hacking here but otherwise, how do
-    # we get to the pos_* kws?
-    boot_ic_tags = ttbl.config.targets[boot_ic].tags
+    if pos_mode == "pxe":
+        # now this is dirty -- we kinda hacking here but otherwise, how do
+        # we get to the pos_* kws?
+        boot_ic_tags = ttbl.config.targets[boot_ic].tags
 
-    # The service
-    kws = dict(target.tags)
-    kws.update(dict(
-        # FIXME: ttbd server's IP address in nwa
-        # FIXME: booting over TFTP
-        ipv4_addr = interconnect['ipv4_addr'],
-        ipv4_gateway = interconnect.get('ipv4_gateway', ""),
-        ipv4_netmask = commonl.ipv4_len_to_netmask_ascii(
-            interconnect['ipv4_prefix_len']),
-        mac_addr = interconnect['mac_addr'],
-        name = target.id,
-        pos_http_url_prefix = boot_ic_tags['pos_http_url_prefix'],
-        pos_nfs_server = boot_ic_tags['pos_nfs_server'],
-        pos_nfs_path = boot_ic_tags['pos_nfs_path'],
-    ))
+        # The service
+        kws = dict(target.tags)
+        kws.update(dict(
+            ipv4_addr = interconnect['ipv4_addr'],
+            ipv4_gateway = interconnect.get('ipv4_gateway', ""),
+            ipv4_netmask = commonl.ipv4_len_to_netmask_ascii(
+                interconnect['ipv4_prefix_len']),
+            mac_addr = mac_addr,
+            name = target.id,
+            # FIXME: rename to pos_tftp_url_prefix
+            pos_http_url_prefix = boot_ic_tags['pos_http_url_prefix'],
+            pos_nfs_server = boot_ic_tags['pos_nfs_server'],
+            pos_nfs_path = boot_ic_tags['pos_nfs_path'],
+        ))
 
-    kws['extra_kopts'] = ""
-    if domain == 'service':
-        kws['boot_domain'] = 'tcf-live'
+        # generate configuration for the target to boot the POS's linux
+        # kernel with the root fs over NFS
+        # FIXME: the name of the pos image and the command line extras
+        # should go over configuration and the target's configuration
+        # should be able to say which image it wants (defaulting everyone
+        # to whichever).
+        kws['extra_kopts'] = ""
+        kws['pos_image'] = 'tcf-live'
         kws['root_dev'] = '/dev/nfs'
-        # no 'single' so it force starts getty
-        # nfsroot: note we use UDP, so it is more resilitent to issues
+        # no 'single' so it force starts getty on different ports
+        # nfsroot: note we use UDP, so it is more resilient to issues
         kws['extra_kopts'] += \
-            "initrd=%(pos_http_url_prefix)sinitramfs-%(boot_domain)s " \
+            "initrd=%(pos_http_url_prefix)sinitramfs-%(pos_image)s " \
             "nfsroot=%(pos_nfs_server)s:%(pos_nfs_path)s,udp,soft " \
             "rd.live.image selinux=0 audit=0 ro " \
             "rd.luks=0 rd.lvm=0 rd.md=0 rd.dm=0 rd.multipath=0 " \
@@ -465,10 +462,10 @@ def power_on_pre_boot_domain_setup(target):
         # Can't get to boot ok
         if False:
             # - installed based on instructions /home/images/howto.rst
-            kws['boot_domain'] = 'clear-24710-installer'
+            kws['pos_image'] = 'clear-24710-installer'
             # removed selinux=0 and single
             kws['extra_kopts'] = \
-                "initrd=%(http_url_prefix)sinitramfs-%(boot_domain)s " \
+                "initrd=%(http_url_prefix)sinitramfs-%(pos_image)s " \
                 "root=nfs:%(nfs_server)s:%(nfs_path)s,soft " \
                 "audit=0 modprobe.blacklist=ccipciedrv,aalbus,aalrms,aalrmc" \
                 "init=/usr/lib/systemd/systemd-bootchart initcall_debug" \
@@ -477,16 +474,12 @@ def power_on_pre_boot_domain_setup(target):
                 "rcupdate.rcu_expedited=1 i915.fastboot=1 rcu_nocbs=0-64" \
                 "ro rootwait"
 
-    mac_addr = kws['mac_addr']
-    file_name = os.path.join(tftp_dir, tftp_prefix, "pxelinux.cfg",
-                             # FIXME: 01- is the ARP type 1 for ethernet
-                             "01-" + mac_addr.replace(":", "-"))
-
-    # note the syslinux/pxelinux format supports no long line
-    # breakage, so we use Python's \ for clearer, shorter lines which
-    # will be pasted all together
-
-    if domain == "service":
+        # Generate the PXE linux configuration
+        #
+        # note the syslinux/pxelinux format supports no long line
+        # breakage, so we use Python's \ for clearer, shorter lines which
+        # will be pasted all together
+        #
         # FIXME: move somewhere else more central?
         #
         # IP specification is needed so the kernel acquires an IP address
@@ -500,23 +493,26 @@ say TCF Network boot to Service OS
 default boot
 prompt 0
 label boot
-  # boot to %(boot_domain)s
-  linux %(pos_http_url_prefix)svmlinuz-%(boot_domain)s
+  # boot to %(pos_image)s
+  linux %(pos_http_url_prefix)svmlinuz-%(pos_image)s
   append console=tty0 console=%(linux_serial_console_default)s,115200 \
     ip=%(ipv4_addr)s::%(ipv4_gateway)s:%(ipv4_netmask)s:%(name)s::off:%(ipv4_gateway)s \
     root=%(root_dev)s %(extra_kopts)s
 """
-    elif domain == 'elf':
-        config = """\
-say TCF Network boot booting ELF file
-serial 0 115200
-default boot
-prompt 0
-label boot
-  kernel elf.c32
-  append kernel.elf
-"""
+        # if there are substitution fields in the config text,
+        # replace them with the keywords; repeat until there are none left
+        # (as some of the keywords might bring in new substitution keys).
+        #
+        # Stop after ten iterations
+        count = 0
+        while '%(' in config:
+            config = config % kws
+            count += 1
+            if count > 9:
+                raise RuntimeError('after ten iterations could not resolve '
+                                   'all configuration keywords')
     else:
+        # pos_mode is local
         config = """\
 say TCF Network boot redirecting to local boot
 serial 0 115200
@@ -526,22 +522,21 @@ label localboot
   localboot 0
 """
 
-    # FIXME:
+    # Write the TFTP configuration  -- when the target boots and does
+    # a DHCP request, DHCP daemon will send it a DHCP address and also
+    # tell it to boot off TFTP with a pxelinux bootloader; it'll load
+    # that bootloader, which will look for different configuration
+    # files off TFTP_DIR/TFTP_PREFIX/pxelinux.cfg/ in a given order,
+    # one of us being 01-ITSMACADDR
     #
-    # if there are substitution fields in the config text,
-    # replace them with the keywords; repeat until there are none left
-    # (as some of the keywords might bring in new substitution keys).
-    #
-    # Stop after ten iterations
-    count = 0
-    while '%(' in config:
-        config = config % kws
-        count += 1
-        if count > 9:
-            raise RuntimeError('after ten iterations could not resolve '
-                               'all configuration keywords')
+    # It will find this one we are now making and boot to the POS for
+    # provisioning or to local boot.
 
-    with open(file_name, "w") as tf:
+    tftp_config_file_name = os.path.join(
+        tftp_dir, tftp_prefix, "pxelinux.cfg",
+        # 01- is the ARP type 1 for ethernet
+        "01-" + mac_addr.replace(":", "-"))
+    with open(tftp_config_file_name, "w") as tf:
         tf.write(config)
         tf.flush()
         # We know the file exists, so it is safe to chmod like this

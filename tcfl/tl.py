@@ -673,4 +673,4 @@ def domain_deploy(ic, target, domain, domain_version,
                   partitioning_fn = pos_partition,
                   mkfs_cmd = "mkfs.ext4 -j %(root_dev)s"):
     target.report_info("DEPRECATED! use tcfl.pos.deploy", level = 0)
-    tcfl.pos.deploy(ic, target, domain_version, boot_dev, root_dev)
+    tcfl.pos.deploy_image(ic, target, domain_version, boot_dev, root_dev)
