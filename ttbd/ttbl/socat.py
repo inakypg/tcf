@@ -1,9 +1,6 @@
 #! /usr/bin/python2
 
 import os
-import pwd
-import shutil
-import stat
 import subprocess
 
 import commonl
@@ -18,16 +15,34 @@ class pci(ttbl.tt_power_control_impl):
     class start_e(error_e):
         pass
 
-    socat_path = "/usr/bin/socat"
+    path = "/usr/bin/socat"
 
     """
-
     This class implements a power control unit that can forward ports
     in the server to other places in the network.
 
     It can be used to provide for access point in the NUTs (Network
-    Under Tests) for the testcases to access, for example, external
-    proxies. 
+    Under Tests) for the testcases to access.
+
+    For example, given a NUT represented by ``NWTARGET`` which has an
+    IPv4 address of 192.168.98.1 in the ttbd server, a port
+    redirection from port 8080 to an external proxy server
+    *proxy-host.in.network:8080* would be implemented as:
+
+    >>> ttbl.config.targets[NWTARGET].pc_impl.append(
+    >>>     ttbl.socat.pci('tcp',
+    >>>                    '192.168.98.1', 8080,
+    >>>                    'proxy-host.in.network', 8080))
+
+    Then to facilitate the work of test scripts, it'd make sense to
+    export tags that explain where the proxy is:
+
+    >>> ttbl.config.targets[NWTARGET].tags_update({
+    >>>     'ftp_proxy': 'http://192.168.98.1:911',
+    >>>     'http_proxy': 'http://192.168.98.1:911',
+    >>>     'https_proxy': 'http://192.168.98.1:911',
+    >>> })
+
 
     .. warning:: this is incomplete!
 
@@ -38,61 +53,47 @@ class pci(ttbl.tt_power_control_impl):
                     "%s-LISTEN:%d,fork,reuseaddr" % (proto, local_port),
                     "%s:%s:%s" % (proto, ip_addr, port)
 
-
     """
 
-    def __init__(self,
-                 local_port, remote_addr, remote_port,
-                 if_net,
-                 if_len,
-                 ip_addr_range_bottom,
-                 ip_addr_range_top,
-                 mac_ip_map = None,
-                 allow_unmapped = False,
-                 debug = False,
-                 ip_mode = 4):
-        assert ip_mode in (4, 6)
+    def __init__(self, proto,
+                 local_addr, local_port,
+                 remote_addr, remote_port):
         ttbl.tt_power_control_impl.__init__(self)
-        self.allow_unmapped = allow_unmapped
-        if mac_ip_map == None:
-            self._mac_ip_map = {}
-        else:
-            self._mac_ip_map = mac_ip_map
-
-        # FIXME: move to power_on_do, to get this info from target's tags
-        self._params = dict(
-            tftp_prefix = tftp_prefix,
-            if_net = if_net,
-            if_addr = if_addr,
-            if_len = if_len,
-            ip_addr_range_bottom = ip_addr_range_bottom,
-            ip_addr_range_top = ip_addr_range_top,
-        )
+        assert proto in [ 'udp', 'tcp', 'sctp',
+                          'udp4', 'tcp4', 'sctp4',
+                          'udp6', 'tcp6', 'sctp6' ]
+        self.proto = proto
+        self.local_addr = local_addr
+        self.local_port = local_port
+        self.remote_addr = remote_addr
+        self.remote_port = remote_port
+        self.tunnel_id = "%s-%s:%d-%s:%d" % (
+            self.proto, self.local_addr, self.local_port,
+            self.remote_addr, self.remote_port)
 
     def power_on_do(self, target):
-        """
-        Start DHCPd and TFTPd servers on the network interface
-        described by `target`
-        """
-        pidfile = os.path.join(target.state_dir, "socat.pid")
-        lockfile = os.path.join(target.state_dir, "socat.lock")
-        args = [
-            "-lp", target.id + ".socat",
-            "-ly",
-            "-L", lockfile
+        pidfile = os.path.join(target.state_dir,
+                               "socat-" + self.tunnel_id + ".pid")
+        cmdline = [
+            self.path,
+            "-ly", "-lp", self.tunnel_id,
+            "%s-LISTEN:%d,bind=%s,fork,reuseaddr" % (
+                self.proto, self.local_port, self.local_addr),
+            "%s:%s:%s" % (self.proto, self.remote_addr, self.remote_port)
         ]
         try:
-            p = subprocess.Popen(args, shell = False, cwd = target.state_dir,
-                             close_fds = True, stderr = subprocess.STDOUT)
-            with open(pidfile, "w") as pidf:
+            p = subprocess.Popen(cmdline, shell = False,
+                                 cwd = target.state_dir,
+                                 close_fds = True, stderr = subprocess.STDOUT)
+            with open(pidfile, "w+") as pidf:
                 pidf.write("%s" % p.pid)
         except OSError as e:
             raise self.dhcpd_start_e("socat failed to start: %s", e)
         pid = commonl.process_started(
-            pidfile, self.socat_path,
-            verification_f = os.path.exists,
-            verification_f_args = (lockfile,),
-            tag = "socat", log = self.log)
+            pidfile, self.path,
+            verification_f = commonl.tcp_port_busy,
+            verification_f_args = (self.local_port,),
+            tag = "socat", log = target.log)
         # systemd might complain with
         #
         # Supervising process PID which is not our child. We'll most
@@ -100,17 +101,18 @@ class pci(ttbl.tt_power_control_impl):
         #
         # Can be ignored
         if pid == None:
-            raise self.dhcpd_start_e("dhcpd failed to start")
+            raise self.start_e("socat failed to start")
         ttbl.daemon_pid_add(pid)	# FIXME: race condition if it died?
 
     def power_off_do(self, target):
-        pidfile = os.path.join(target.state_dir, "socat.pid")
-        commonl.process_terminate(pidfile, self.socat_path, tag = "socat")
+        pidfile = os.path.join(target.state_dir,
+                               "socat-" + self.tunnel_id + ".pid")
+        commonl.process_terminate(pidfile, self.path, tag = "socat")
 
     def power_get_do(self, target):
-        pidfile = os.path.join(target.state_dir, "socat.pid")
-        pid = commonl.process_alive(pidfile, self.socat_path)
+        pidfile = os.path.join(target.state_dir,
+                               "socat-" + self.tunnel_id + ".pid")
+        pid = commonl.process_alive(pidfile, self.path)
         if pid != None:
             return True
-        else:
-            return False
+        return False
