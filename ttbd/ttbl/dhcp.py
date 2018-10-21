@@ -387,16 +387,6 @@ subnet6 %(if_net)s/%(if_len)s {
 
 def power_on_pre_pos_setup(target):
 
-    # FIXME
-    #
-    # - set in tags which interconnect is used for booting?
-    #
-    # - initialize keywords from interconnect, target, then properties
-    #
-    # - use the kws to initialize files and stuff
-    #
-    # - we need a name for this mechanism
-
     pos_mode = target.fsdb.get("pos_mode")
     if pos_mode == None:
         target.log.info("POS boot: ignoring, pos_mode property not set")
@@ -408,16 +398,18 @@ def power_on_pre_pos_setup(target):
                         "(vs PXE or local)" % pos_mode)
         return
 
-    boot_ic = target.tags.get('boot_interconnect', None)
+    boot_ic = target.tags.get('pos_boot_interconnect', None)
     if boot_ic == None:
-        raise RuntimeError('no "boot_interconnect" tag/property defined, '
+        raise RuntimeError('no "pos_boot_interconnect" tag/property defined, '
                            'can\'t boot off network')
     if not boot_ic in target.tags['interconnects']:
         raise RuntimeError('this target does not belong to the '
                            'boot interconnect "%s" defined in tag '
-                           '"boot_interconnect"' % boot_ic)
+                           '"pos_boot_interconnect"' % boot_ic)
 
     interconnect = target.tags['interconnects'][boot_ic]
+    # FIXME: at some point, for ic-less POS-PXE boot we could get this
+    # from pos_mac_addr and default to ic['mac_addr']
     mac_addr = interconnect['mac_addr']
 
     if pos_mode == "pxe":
