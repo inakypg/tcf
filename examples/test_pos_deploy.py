@@ -33,14 +33,11 @@ class aio(tcfl.tc.tc_c):
         # are here, still in the service OS, so reboot into our new OS
         target.power.cycle()
 
-        # Wait for the OS to boot, login as root in the serial console
-        # FIXME This is kinda distro specific and needs to be streamlined
-        target.expect(re.compile('login:'))	# wait for "i booted prompt"
-        target.send('root')			# login as root, assumes passwordless
-        # now that we logged in, change the regex expectation
+        # our shell prompt will look like this...
         target.shell.linux_shell_prompt_regex = re.compile('root@.*# ')
-        # and make sure the targe this up and the shell properly configured
-        target.shell.up()
+        # Wait for the OS to boot, login as root in the serial
+        # console, configure the shell
+        target.shell.up(user = 'root')
 
         # We don't need the interconnect anymore by-- after we booted!!
         # release it for anyone else -- a TC that needs the
