@@ -18,7 +18,7 @@ import tcfl.pos
 image = os.environ["IMAGE"]
 
 @tcfl.tc.interconnect("ipv4_addr")
-@tcfl.tc.target('linux and boot_interconnect')
+@tcfl.tc.target('pos_capable')
 class aio(tcfl.tc.tc_c):
 
     # FIXME move to deploy phase; need to fix things in tc.py so we
