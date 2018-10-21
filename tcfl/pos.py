@@ -668,7 +668,7 @@ def deploy_image(ic, target, image,
                 testcase.expecter.timeout = 800
                 target.shell.run(
                     "time rsync -aAX --numeric-ids --delete "
-                    "--exclude='/keepers/*' "
+                    "--exclude='/persistent.tcf.d/*' "
                     "%(rsync_server)s/%(image)s/. /mnt/."
                     % kws)
                 target.property_set('pos_root_' + root_part_dev_base, image)
@@ -698,6 +698,33 @@ def deploy_image(ic, target, image,
         target.shell.run("umount /mnt")
 
     target.report_info("deployed %(image)s to %(root_part_dev)s" % kws)
+
+
+def mk_persistent_tcf_d(target, subdirs = None):
+    if subdirs == None:
+        dirs = [ '/mnt/persistent.tcf.d' ]
+    else:
+        dirs = [ '/mnt/persistent.tcf.d/' + subdir for subdir in subdirs ]
+
+    # just create / recreate all the thirs
+    target.shell.run('mkdir -p ' + " ".join(dirs))
+
+    # Ensure there is a README -- this is slow, so don't do it if
+    # already there
+    output = target.shell.run(
+        'test -f /mnt/persistent.tcf.d/README || echo N""O' ,
+        output = True)
+    if 'NO' in output:
+        target.shell.run("""\
+cat <<EOF > /mnt/persistent.tcf.d/README
+This directory has been created by TCF's Provisioning OS to store files to
+be provisioned in the root file system.
+
+When flashing a new image to this partition, the contents in this tree
+will not be removed/replaced. It is then faster to rsync things in
+from the client machine.
+EOF""")
+
 
 def deploy_linux_kernel(ic, target, _kws):
     """Deploy a linux kernel tree in the local machine to the target's
@@ -768,23 +795,28 @@ EOF""")
     # boot configuration code to find only one kernel and boot
     # that.
     target.report_info("rsyncing boot/ to target")
-    # make sure we have spots in the keeper are where we'll put
+    # make sure we have spots in the persistent are where we'll put
     # out stuff so it is faster to upload repeatedly
-    target.shell.run('mkdir -p /mnt/keepers/boot '
-                     '/mnt/keepers/lib/modules')
-    # upload the kernel to the keeper area
+    mk_persistent_tcf_d(target, [ 'boot', 'lib/modules' ])
+
+    # upload the kernel to the persistent area
     target.shcmd_local(
         "time rsync -aAX --numeric-ids --delete --port %(rsync_port)s "
         "%(pos_deploy_linux_kernel_tree)s/boot/. "
-        "%(rsync_server)s::rootfs/keepers/boot/.")
+        "%(rsync_server)s::rootfs/persistent.tcf.d/boot/.")
+    target.testcase._targets_active()
     target.report_info("rsyncing lib/modules to target")
     target.shcmd_local(
         "time rsync -aAX --numeric-ids --delete --port %(rsync_port)s "
         "%(pos_deploy_linux_kernel_tree)s/lib/modules/. "
-        "%(rsync_server)s::rootfs/keepers/lib/modules/.")
-    # Now move it from the keeper area to its final location
+        "%(rsync_server)s::rootfs/persistent.tcf.d/lib/modules/.")
+    # Now move it from the persistent area to its final location
+    target.testcase._targets_active()
     target.shell.run(
-        "rsync -aAX --delete /mnt/keepers/boot/. /mnt/boot/.")
+        "rsync -aAX --delete /mnt/persistent.tcf.d/boot/. /mnt/boot/.")
+    target.testcase._targets_active()
     target.shell.run(
-        "rsync -aAX --delete /mnt/keepers/lib/modules/. /mnt/lib/modules/.")
+        "rsync -aAX --delete /mnt/persistent.tcf.d/lib/modules/. "
+        "/mnt/lib/modules/.")
+    target.testcase._targets_active()
     target.report_pass("linux kernel transferred")
