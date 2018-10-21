@@ -33,12 +33,6 @@ class aio(tcfl.tc.tc_c):
         # are here, still in the service OS, so reboot into our new OS
         target.power.cycle()
 
-        # FIXME: HACK -- this should happen after a power cycle?
-        # should be a post hack installed by expecters
-        # FIXME: do for each console
-        tcfl.expecter.console_rx_flush(self.expecter, target, truncate = True)
-
-
         # Wait for the OS to boot, login as root in the serial console
         # FIXME This is kinda distro specific and needs to be streamlined
         target.expect(re.compile('login:'))	# wait for "i booted prompt"
