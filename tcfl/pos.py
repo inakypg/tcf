@@ -648,14 +648,30 @@ def deploy_image(ic, target, image,
 
 
     # FIXME: check ic is powered on?
-    target.report_info("rebooting into POS for flashing")
-    target.property_set("pos_mode", "pxe")
-    target.power.cycle()
+    for tries in range(3):
+        target.report_info("rebooting into POS for flashing [%d/3]" % tries)
+        target.property_set("pos_mode", "pxe")
+        target.power.cycle()
 
-    # Sequence for TCF-live based on Fedora
-    if pos_prompt:
-        target.shell.linux_shell_prompt_regex = pos_prompt
-    target.shell.up()
+        # Sequence for TCF-live based on Fedora
+        if pos_prompt:
+            target.shell.linux_shell_prompt_regex = pos_prompt
+        try:
+            target.shell.up()
+        except tcfl.tc.error_e as e:
+            outputf = e.attachments_get().get('console output', None)
+            if outputf:
+                output = open(outputf.name).read()
+            if output == None or output == "" or output == "\x00":
+                target.report_error("POS: no console output, retrying")
+                continue
+            target.report_error("POS: unexpected console output")
+            raise
+        break
+    else:
+        raise tcfl.tc.blocked_e(
+            "POS: tried too many times to boot, without signs of life",
+            { "console output": target.console.read() })
 
     # Ok, we might be accessing the target here to repartition and
     # such, so let's first select a root partition
