@@ -19,7 +19,7 @@ image = os.environ["IMAGE"]
 
 @tcfl.tc.interconnect("ipv4_addr")
 @tcfl.tc.target('pos_capable')
-class aio(tcfl.tc.tc_c):
+class _test(tcfl.tc.tc_c):
 
     # FIXME move to deploy phase; need to fix things in tc.py so we
     # can use the expecter
