@@ -29,8 +29,8 @@ def partition(target, device):
     output = target.shell.run(
         'cat /sys/block/%s/size /sys/block/%s/queue/physical_block_size'
         % (device_basename, device_basename), output = True)
-    regex = re.compile(r"(?P<blocks>[0-9]+)\r\n"
-                       r"(?P<block_size>[0-9]+)\r\n", re.MULTILINE)
+    regex = re.compile("^(?P<blocks>[0-9]+)\n"
+                       "(?P<block_size>[0-9]+)$", re.MULTILINE)
     m = regex.search(output)
     if not m:
         raise tcfl.tc.blocked_e(
@@ -41,7 +41,8 @@ def partition(target, device):
     blocks = int(m.groupdict()['blocks'])
     block_size = int(m.groupdict()['block_size'])
     size_gb = blocks * block_size / 1024 / 1024 / 1024
-    target.report_info("%s is %d GiB in size" % (device, size_gb))
+    target.report_info("POS: %s is %d GiB in size" % (device, size_gb),
+                       dlevel = 2)
 
     partsizes = target.kws.get('pos_partsizes', None)
     if partsizes == None:
@@ -476,14 +477,91 @@ def _seed_match(lp, goal):
             scores[part_name] = Levenshtein.seqratio(goall, seedl)
         else:
             scores[part_name] = 0
-    selected, score = max(scores.iteritems(), key = operator.itemgetter(1))
-    return selected, score, lp[selected]
+    if scores:
+        selected, score = max(scores.iteritems(), key = operator.itemgetter(1))
+        return selected, score, lp[selected]
+    return None, 0, None
+
+def _root_part_select(target, image, boot_dev, root_part_dev):
+    # what is out root device?
+    if root_part_dev != None:
+        # A root partition device was given, let's do some basic
+        # checks, as it if it is NAME it needs to be in the target's
+        # tags/properties on pos_root_NAME
+        assert isinstance(root_part_dev, basestring), \
+            'root_part_dev must be a string'
+        if not 'pos_root_' + root_part_dev in target.kws:
+            # specified a root partition that is not known
+            raise tcfl.tc.blocked_e(
+                'POS: asked to use root partition "%s", which is unknown; '
+                '(the target contains no "pos_root_%s" tag/property)'
+                % (root_part_dev, root_part_dev))
+        return root_part_dev
+
+    # Gave a None partition, means pick our own based on a guess. We
+    # know what image we want to install, so we will scan the all the
+    # target's root partitions (defined in tags/properties
+    # pos_root_XYZ) to see who has installed the most similar thing to
+    # image and use that (so it is faster to rsync it).
+
+    partl = {}
+    empties = []
+    # refresh target information FIXME: need a better method
+    target.rt = target.rtb.rest_tb_target_update(target.id)
+    for tag, value in target.rt.iteritems():
+        if not tag.startswith("pos_root_"):
+            continue
+        dev_basename = tag.replace("pos_root_", "")
+        dev_name = "/dev/" + dev_basename
+        if value == 'EMPTY':
+            empties.append(dev_name)
+        else:
+            partl[dev_name] = value
+    target.report_info("POS: %s: empty partitions: %s"
+                       % (boot_dev, " ".join(empties)), dlevel = 2)
+    target.report_info("POS: %s: imaged partitions: %s"
+                       % (boot_dev,
+                          " ".join([ i[0] + "|" + i[1]
+                                     for i in partl.items() ])),
+                       dlevel = 2)
+    if not partl and not empties:
+        # there were no pos_root_XYZ entries, so that means we are not
+        # initialized properly, reinit
+        target.report_info("POS: %s: no root partitions known, uninitialized?"
+                           % boot_dev, dlevel = 1)
+        return None
+
+    # We don't have empties to spare, so choose one that is the most
+    # similar, to improve the transfer rate
+    #
+    # This prolly can be made more efficient, like collect least-used
+    # partition data? to avoid the situation where two clients keep
+    # imaging over each other when they could have two separate images
+    root_part_dev, score, seed = _seed_match(partl, image)
+    if score == 0:
+        # none is a good match, find an empty one...if there are
+        # non empty, just any
+        if empties:
+            root_part_dev = random.choice(empties)
+            target.report_info("POS: picked up empty root partition %s"
+                               % root_part_dev, dlevel = 2)
+        else:
+            root_part_dev = random.choice(partl.keys())
+            target.report_info(
+                "POS: picked up random partition %s, because none of the "
+                "existing installed ones was a good match and there "
+                "are no empty ones" % root_part_dev, dlevel = 2)
+    else:
+        target.report_info("POS: picked up root partition %s for %s "
+                           "due to a %.02f similarity with %s"
+                           % (root_part_dev, seed, score, seed), dlevel = 2)
+    return root_part_dev
 
 def deploy_image(ic, target, image,
                  boot_dev = None, root_part_dev = None,
                  partitioning_fn = partition,
-                 extra_deploy_fns = [],
-                 mkfs_cmd = "mkfs.ext4 -j %(root_dev)s",
+                 extra_deploy_fns = None,
+                 mkfs_cmd = "mkfs.ext4 -j %(root_part_dev)s",
                  pos_prompt = None):
 
     """Deploy an image to a target using the Provisioning OS
@@ -548,60 +626,27 @@ def deploy_image(ic, target, image,
     # What is our boot device?
     if boot_dev:
         assert isinstance(boot_dev, basestring), 'boot_dev must be a string'
+        target.report_info("POS: boot device %s (from arguments)"
+                           % boot_dev)
     else:
         boot_dev = target.kws.get('pos_boot_dev', None)
         if boot_dev == None:
             raise tcfl.tc.blocked_e(
                 "Can't guess boot_dev (no `pos_boot_dev` tag available)",
                 { 'target': target } )
+        target.report_info("POS: boot device %s (from pos_boot_dev tag)"
+                           % boot_dev)
     boot_dev = "/dev/" + boot_dev
-
-    # what is out root device?
-    if root_part_dev:
-        assert isinstance(root_part_dev, basestring), \
-            'root_part_dev must be a string'
+    # HACK: /dev/[hs]d* do partitions as /dev/[hs]dN, where as mmc and
+    # friends add /dev/mmcWHATEVERpN. Seriously...
+    if boot_dev.startswith("/dev/hd") \
+       or boot_dev.startswith("/dev/sd") \
+       or boot_dev.startswith("/dev/vd"):
+        target.kw_set('p_prefix', "")
     else:
-        # HACK: /dev/[hs]d* do partitions as /dev/[hs]dN, where as mmc and
-        # friends add /dev/mmcWHATEVERpN. Seriously...
-        device = boot_dev
-        if device.startswith("/dev/hd") \
-           or device.startswith("/dev/sd") \
-           or device.startswith("/dev/vd"):
-            target.kw_set('p_prefix', "")
-        else:
-            target.kw_set('p_prefix', "p")
+        target.kw_set('p_prefix', "p")
 
-        partl = {}
-        empties = []
-        for tag, value in target.rt.iteritems():
-            if not tag.startswith("pos_root_"):
-                continue
-            dev_basename = tag.replace("pos_root_", "")
-            dev_name = "/dev/" + dev_basename
-            if value == 'EMPTY':
-                empties.append(dev_name)
-            else:
-                partl[dev_name] = value
 
-        root_part_dev, score, seed = _seed_match(partl, image)
-        if score == 0:
-            # none is a good match, find an empty one...if there are
-            # non empty, just any
-            if empties:
-                root_part_dev = random.choice(empties)
-                target.report_info("%s: picked up empty root partition"
-                                   % root_part_dev)
-            else:
-                # FIXME: collect least-used partition data?
-                root_part_dev = random.choice(partl.keys())
-                target.report_info(
-                    "%s: picked up random partition because none of the "
-                    "existing installed ones was a good match and there "
-                    "are no empty ones" % root_part_dev)
-        else:
-            target.report_info("picked up root partition %s for %s "
-                               "due to a %.02f similarity with %s"
-                               % (root_part_dev, seed, score, seed))
     # FIXME: check ic is powered on?
     target.report_info("rebooting into POS for flashing")
     target.property_set("pos_mode", "pxe")
@@ -612,7 +657,38 @@ def deploy_image(ic, target, image,
         target.shell.linux_shell_prompt_regex = pos_prompt
     target.shell.up()
 
-    # FIXME: use default dict?
+    # Ok, we might be accessing the target here to repartition and
+    # such, so let's first select a root partition
+    if target.property_get('pos_repartition'):
+        # Need to reinit the partition table (we were told to by
+        # setting pos_repartition to anything
+        target.report_info("POS: repartitioning per pos_repartition property")
+        partitioning_fn(target, boot_dev)
+        target.property_set('pos_repartition', None)
+
+    for tries in range(3):
+        target.report_info("POS: guessing partition device [%d/3] "
+                           "(defaulting to %s)" % (tries, root_part_dev))
+        root_part_dev = _root_part_select(target, image,
+                                          boot_dev, root_part_dev)
+        if root_part_dev != None:
+            target.report_info("POS: will use %s for root partition"
+                               % root_part_dev)
+            break
+        # we couldn't find a root partition device, which means the
+        # thing is trashed
+        target.report_info("POS: repartitioning because couldn't find "
+                           "root partitions")
+        partitioning_fn(target, boot_dev)
+    else:
+        output = target.shell.run("fdisk -l " + boot_dev, output = True)
+        raise tcfl.tc.blocked_e(
+            "Tried too much to reinitialize the partition table to "
+            "pick up a root partition? is there enough space to "
+            "create root partitions?",
+            dict(fdisk_l = output,
+                 partsizes = target.kws.get('pos_partsizes', None)))
+
     root_part_dev_base = os.path.basename(root_part_dev)
     kws = dict(
         rsync_server = ic.kws['pos_rsync_server'],
@@ -628,8 +704,9 @@ def deploy_image(ic, target, image,
     try:
         # FIXME: act on failing, just reformat and retry, then
         # bail out on failure
-        target.report_info("mounting /mnt to image")
-        for _try_count in range(3):
+        for try_count in range(3):
+            target.report_info("POS: mounting root partition %s onto /mnt "
+                               "to image [%d/3]" % (root_part_dev, try_count))
             # don't let it fail or it will raise an exception, so we
             # print FAILED in that case to look for stuff; note the
             # double apostrophe trick so the regex finder doens't trip
@@ -647,21 +724,26 @@ def deploy_image(ic, target, image,
                    'codepage or helper program, or other error.' in output:
                     # ok, this means probably the partitions are not
                     # formatted; FIXME: support other filesystemmakeing?
+                    target.report_info(
+                        "POS: formating root partition %s with `%s`"
+                        % (root_part_dev, mkfs_cmd % kws))
                     target.shell.run(mkfs_cmd % kws)
                 else:
                     raise tcfl.tc.blocked_e(
-                        "Can't recover unknown error condition: %s" % output,
-                        dict(target = target))
+                        "POS: Can't recover unknown error condition: %s"
+                        % output, dict(target = target, output = output))
             else:
-                target.report_info("mounted /mnt to image")
+                target.report_info("POS: mounted %s onto /mnt to image"
+                                   % root_part_dev)
                 break	# it worked, we are done
             # fall through, retry
         else:
             raise tcfl.tc.blocked_e(
-                "Tried to deploy too many times and failed",
+                "POS: Tried to mount too many times and failed",
                 dict(target = target))
+
         if image:
-            target.report_info("rsyncing seed %(image)s from "
+            target.report_info("POS: rsyncing %(image)s from "
                                "%(rsync_server)s to /mnt" % kws)
             try:
                 original_timeout = testcase.expecter.timeout
@@ -674,10 +756,15 @@ def deploy_image(ic, target, image,
                 target.property_set('pos_root_' + root_part_dev_base, image)
             finally:
                 testcase.expecter.timeout = original_timeout
+            target.report_info("POS: rsynced %(image)s from "
+                               "%(rsync_server)s to /mnt" % kws)
 
             # did the user provide an extra function to deploy stuff?
-            for extra_deploy_fn in extra_deploy_fns:
-                extra_deploy_fn(ic, target, kws)
+            if extra_deploy_fns:
+                for extra_deploy_fn in extra_deploy_fns:
+                    target.report_info("POS: running extra deploy fn %s"
+                                       % extra_deploy_fn, dlevel = 2)
+                    extra_deploy_fn(ic, target, kws)
 
             # Configure the bootloader
             #
@@ -686,6 +773,7 @@ def deploy_image(ic, target, image,
 
             # FIXME: we are EFI only for now, way easier
             # Make sure we have all the entries for systemd-loader
+            target.report_info("POS: configuring bootloader")
             boot_config(target, root_part_dev_base)
         target.shell.run("sync")
         # Now setup the local boot loader to boot off that
@@ -697,7 +785,7 @@ def deploy_image(ic, target, image,
     finally:
         target.shell.run("umount /mnt")
 
-    target.report_info("deployed %(image)s to %(root_part_dev)s" % kws)
+    target.report_info("POS: deployed %(image)s to %(root_part_dev)s" % kws)
 
 
 def mk_persistent_tcf_d(target, subdirs = None):
