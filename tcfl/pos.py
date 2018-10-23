@@ -343,6 +343,7 @@ def boot_config(target, root_part_dev,
         linux_options_append = [
             "console=%(linux_serial_console_default)s,115200n8" % kws
         ]
+        linux_options_append += target.rt.get('linux_options_append', [])
 
         for option in linux_options_append:
             if not option in linux_options:
@@ -368,7 +369,7 @@ def boot_config(target, root_part_dev,
     # the POS /boot)
 
     # mkfs.vfat /boot, mount it
-    target.report_info("mounting %(boot_part_dev) in /boot")
+    target.report_info("mounting %(boot_part_dev)s in /boot" % kws)
     target.shell.run("mkfs.vfat -F32 /dev/%(boot_part_dev)s" % kws)
     target.shell.run("sync")
     target.shell.run("mount /dev/%(boot_part_dev)s /boot" % kws)
