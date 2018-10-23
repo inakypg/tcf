@@ -42,17 +42,6 @@ class pci(ttbl.tt_power_control_impl):
     >>>     'http_proxy': 'http://192.168.98.1:911',
     >>>     'https_proxy': 'http://192.168.98.1:911',
     >>> })
-
-
-    .. warning:: this is incomplete!
-
-       - ensure your firewalls are open as needed.
-
-                    "/usr/bin/socat",
-                    "-ly", "-lp", tunnel_id,
-                    "%s-LISTEN:%d,fork,reuseaddr" % (proto, local_port),
-                    "%s:%s:%s" % (proto, ip_addr, port)
-
     """
 
     def __init__(self, proto,
