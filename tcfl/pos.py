@@ -658,6 +658,9 @@ def deploy_image(ic, target, image,
         if pos_prompt:
             target.shell.linux_shell_prompt_regex = pos_prompt
         try:
+            original_timeout = testcase.expecter.timeout
+            # plenty to boot to an nfsroot, hopefully
+            testcase.expecter.timeout = 40
             target.shell.up()
         except tcfl.tc.error_e as e:
             outputf = e.attachments_get().get('console output', None)
@@ -668,6 +671,8 @@ def deploy_image(ic, target, image,
                 continue
             target.report_error("POS: unexpected console output")
             raise
+        finally:
+            testcase.expecter.timeout = original_timeout
         break
     else:
         raise tcfl.tc.blocked_e(
