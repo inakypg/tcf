@@ -1,12 +1,10 @@
 #! /usr/bin/python
 #
-# Add to your config:
+# Copyright (c) 2018 Intel Corporation
 #
-# tcfl.config.url_add('https://jfsotc09.jf.intel.com:5001',
-#                    ssl_ignore = True)
+# SPDX-License-Identifier: Apache-2.0
 #
-#
-# $ [DOMAIN_VERSION=91] tcf run -v test_deploy_domain.py
+# pylint: disable = missing-docstring
 
 import os
 import re
@@ -21,37 +19,22 @@ image = os.environ["IMAGE"]
 @tcfl.tc.target('pos_capable')
 class _test(tcfl.tc.tc_c):
 
-    # FIXME move to deploy phase; need to fix things in tc.py so we
-    # can use the expecter
-    def eval_10_deploy(self, target, ic):
-
-        ic.power.cycle()
-        # Deploy
+    def deploy(self, ic, target):
+        # ensure network, DHCP, TFTP, etc are up and deploy
+        ic.power.on()
         tcfl.pos.deploy_image(ic, target, image)
 
-        # If there are errors, exceptions will come,but otherwise we
-        # are here, still in the service OS, so reboot into our new OS
+    def start(self, ic, target):
+        # fire up the target, wait for a login prompt
         target.power.cycle()
-
-        # our shell prompt will look like this...
         target.shell.linux_shell_prompt_regex = re.compile('root@.*# ')
-        # Wait for the OS to boot, login as root in the serial
-        # console, configure the shell
         target.shell.up(user = 'root')
-
-        # We don't need the interconnect anymore by-- after we booted!!
-        # release it for anyone else -- a TC that needs the
-        # interconnect would not do this
-        ic.release()
         target.report_pass("Deployed %s" % image)
+        # release here so we had the daemon control where we boot to
+        ic.release()
 
-    #
-    # Run our tests
-    #
-    def eval_20(self, target):
-        # run the command that launches the tests, wait for the shell
-        # prompt; if it fails, this will raise an exception
-        # FIXME: we need hooks to detect kernel panics, oopses, etc
+    def eval(self):
+        # do our test
         target.shell.run("echo I booted", "I booted")
 
     def teardown(self):
