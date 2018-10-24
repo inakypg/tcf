@@ -657,10 +657,10 @@ def deploy_image(ic, target, image,
         # Sequence for TCF-live based on Fedora
         if pos_prompt:
             target.shell.linux_shell_prompt_regex = pos_prompt
+        original_timeout = testcase.tls.expecter.timeout
         try:
-            original_timeout = testcase.expecter.timeout
             # plenty to boot to an nfsroot, hopefully
-            testcase.expecter.timeout = 40
+            testcase.tls.expecter.timeout = 40
             target.shell.up()
         except tcfl.tc.error_e as e:
             outputf = e.attachments_get().get('console output', None)
@@ -672,7 +672,7 @@ def deploy_image(ic, target, image,
             target.report_error("POS: unexpected console output")
             raise
         finally:
-            testcase.expecter.timeout = original_timeout
+            testcase.tls.expecter.timeout = original_timeout
         break
     else:
         raise tcfl.tc.blocked_e(
@@ -768,8 +768,8 @@ def deploy_image(ic, target, image,
             target.report_info("POS: rsyncing %(image)s from "
                                "%(rsync_server)s to /mnt" % kws)
             try:
-                original_timeout = testcase.expecter.timeout
-                testcase.expecter.timeout = 800
+                original_timeout = testcase.tls.expecter.timeout
+                testcase.tls.expecter.timeout = 800
                 target.shell.run(
                     "time rsync -aAX --numeric-ids --delete "
                     "--exclude='/persistent.tcf.d/*' "
@@ -777,7 +777,7 @@ def deploy_image(ic, target, image,
                     % kws)
                 target.property_set('pos_root_' + root_part_dev_base, image)
             finally:
-                testcase.expecter.timeout = original_timeout
+                testcase.tls.expecter.timeout = original_timeout
             target.report_info("POS: rsynced %(image)s from "
                                "%(rsync_server)s to /mnt" % kws)
 
