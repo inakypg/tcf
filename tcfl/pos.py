@@ -289,7 +289,8 @@ def boot_config(target, root_part_dev,
         linux_options = _linux_options
     if linux_kernel_file == None:
         raise tcfl.tc.blocked_e(
-            "Cannot guess a Linux kernel to boot")
+            "Cannot guess a Linux kernel to boot",
+            dict(target = target))
     # remove absolutization (some specs have it), as we need to copy from
     # mounted filesystems
     if os.path.isabs(linux_kernel_file):
@@ -496,7 +497,8 @@ def _root_part_select(target, image, boot_dev, root_part_dev):
             raise tcfl.tc.blocked_e(
                 'POS: asked to use root partition "%s", which is unknown; '
                 '(the target contains no "pos_root_%s" tag/property)'
-                % (root_part_dev, root_part_dev))
+                % (root_part_dev, root_part_dev),
+                dict(target = target))
         return root_part_dev
 
     # Gave a None partition, means pick our own based on a guess. We
@@ -677,7 +679,7 @@ def deploy_image(ic, target, image,
     else:
         raise tcfl.tc.blocked_e(
             "POS: tried too many times to boot, without signs of life",
-            { "console output": target.console.read() })
+            { "console output": target.console.read(), 'target': target })
 
     # Ok, we might be accessing the target here to repartition and
     # such, so let's first select a root partition
@@ -708,7 +710,7 @@ def deploy_image(ic, target, image,
             "Tried too much to reinitialize the partition table to "
             "pick up a root partition? is there enough space to "
             "create root partitions?",
-            dict(fdisk_l = output,
+            dict(target = target, fdisk_l = output,
                  partsizes = target.kws.get('pos_partsizes', None)))
 
     root_part_dev_base = os.path.basename(root_part_dev)
