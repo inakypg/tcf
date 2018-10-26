@@ -659,11 +659,9 @@ def deploy_image(ic, target, image,
         # Sequence for TCF-live based on Fedora
         if pos_prompt:
             target.shell.linux_shell_prompt_regex = pos_prompt
-        original_timeout = testcase.tls.expecter.timeout
         try:
             # plenty to boot to an nfsroot, hopefully
-            testcase.tls.expecter.timeout = 60
-            target.shell.up()
+            target.shell.up(timeout = 60)
         except tcfl.tc.error_e as e:
             outputf = e.attachments_get().get('console output', None)
             if outputf:
@@ -673,8 +671,6 @@ def deploy_image(ic, target, image,
                 continue
             target.report_error("POS: unexpected console output")
             raise
-        finally:
-            testcase.tls.expecter.timeout = original_timeout
         break
     else:
         raise tcfl.tc.blocked_e(
