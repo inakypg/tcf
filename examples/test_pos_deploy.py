@@ -33,7 +33,7 @@ class _test(tcfl.tc.tc_c):
         # release here so we had the daemon control where we boot to
         ic.release()
 
-    def eval(self):
+    def eval(self, target):
         # do our test
         target.shell.run("echo I booted", "I booted")
 
