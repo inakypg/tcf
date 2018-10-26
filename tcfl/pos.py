@@ -662,7 +662,7 @@ def deploy_image(ic, target, image,
         original_timeout = testcase.tls.expecter.timeout
         try:
             # plenty to boot to an nfsroot, hopefully
-            testcase.tls.expecter.timeout = 40
+            testcase.tls.expecter.timeout = 60
             target.shell.up()
         except tcfl.tc.error_e as e:
             outputf = e.attachments_get().get('console output', None)
