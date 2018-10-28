@@ -22,6 +22,7 @@ class _test(tcfl.tc.tc_c):
     def deploy(self, ic, target):
         # ensure network, DHCP, TFTP, etc are up and deploy
         ic.power.on()
+        ic.report_pass("powered on")
         tcfl.pos.deploy_image(ic, target, image)
 
     def start(self, ic, target):
