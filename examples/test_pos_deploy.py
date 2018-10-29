@@ -23,7 +23,8 @@ class _test(tcfl.tc.tc_c):
         # ensure network, DHCP, TFTP, etc are up and deploy
         ic.power.on()
         ic.report_pass("powered on")
-        tcfl.pos.deploy_image(ic, target, image)
+        global image
+        image = tcfl.pos.deploy_image(ic, target, image)
 
     def start(self, ic, target):
         # fire up the target, wait for a login prompt
