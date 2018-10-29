@@ -1,9 +1,9 @@
 #! /bin/bash -eu
 #
+# Copyright (c) 2018 Intel Corporation
 #
-# Clear:
-#  release=XYZ http://linux-ftp.intel.com/pub/mirrors/clearlinux/releases/$release/clear/clear-$release-live.img.xz
-#
+# SPDX-License-Identifier: Apache-2.0
+
 progname=$(basename $0)
 destdir=$1
 image_file=$2
@@ -15,6 +15,17 @@ trap cleanup EXIT
 function help() {
     cat <<EOF
 $progname DIRECTORY IMAGEFILE [IMAGETYPE]
+
+Clearlinux:
+
+  $ wget https://download.clearlinux.org/releases/25930/clear/clear-25930-live.img.xz
+  $ $progname clear:live:25930::x86_64 clear-25930-live.img.xz
+
+Yocto:
+
+  $ wget http://downloads.yoctoproject.org/releases/yocto/yocto-2.5.1/machines/genericx86-64/core-image-minimal-genericx86-64.wic
+  $ $progname yocto:core-image-minimal:2.5.1::x86_64 core-image-minimal-genericx86-64.wic
+
 EOF
 }
 

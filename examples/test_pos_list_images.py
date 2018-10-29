@@ -1,4 +1,10 @@
 #! /usr/bin/python2
+#
+# Copyright (c) 2018 Intel Corporation
+#
+# SPDX-License-Identifier: Apache-2.0
+#
+# pylint: disable = missing-docstring
 
 import os
 import re
@@ -11,7 +17,9 @@ import tcfl.pos
 
 @tcfl.tc.interconnect("pos_rsync_server", mode = "all")
 class _(tcfl.tc.tc_c):
-
+    """
+    List images available in a POS rsync server
+    """
     def eval(self, ic):
         ic.power.on()
         port = ic.tunnel.add(873, ic.kws['ipv4_addr'])	# rsync's
