@@ -15,6 +15,7 @@ import random
 import re
 import traceback
 
+import distutils.version
 import Levenshtein
 
 import tcfl.tc
@@ -433,6 +434,27 @@ EOF
     # we are jumping in for manual debugging
     target.shell.run("umount /dev/%(boot_part_dev)s" % kws)
 
+
+def _entry_to_tuple(i):
+    distro = ""
+    spin = ""
+    version = ""
+    pl = ""
+    arch = ""
+    il = i.split(":")
+    if len(il) > 0:
+        distro = il[0]
+    if len(il) > 1:
+        spin = il[1]
+    if len(il) > 2:
+        version = il[2]
+    if len(il) > 3:
+        pl = il[3]
+    if len(il) > 4:
+        arch = il[4]
+    return distro, spin, version, pl, arch
+
+
 def _seed_match(lp, goal):
     """
     Given two image/seed specifications, return the most similar one
@@ -448,24 +470,6 @@ def _seed_match(lp, goal):
     >>> ('part5', 0.933333333333, 'rtk::114')
 
     """
-    def _entry_to_tuple(i):
-        distro = ""
-        spin = ""
-        version = ""
-        pl = ""
-        arch = ""
-        il = i.split(":")
-        if len(il) > 0:
-            distro = il[0]
-        if len(il) > 1:
-            spin = il[1]
-        if len(il) > 2:
-            version = il[2]
-        if len(il) > 3:
-            pl = il[3]
-        if len(il) > 4:
-            arch = il[4]
-        return distro, spin, version, pl, arch
 
     goall = _entry_to_tuple(goal)
     scores = {}
@@ -483,6 +487,114 @@ def _seed_match(lp, goal):
         selected, score = max(scores.iteritems(), key = operator.itemgetter(1))
         return selected, score, lp[selected]
     return None, 0, None
+
+
+def image_list_from_rsync_output(output):
+    imagel = []
+    # drwxrwxr-x          4,096 2018/10/19 00:41:04 .
+    # drwxr-xr-x          4,096 2018/10/11 06:24:44 clear:live:25550
+    # dr-xr-xr-x          4,096 2018/04/24 23:10:02 fedora:cloud-base-x86-64:28
+    # drwxr-xr-x          4,096 2018/10/11 20:52:34 rtk::114
+    # ...
+    # so we parse for 5 fields, take last
+    for line in output.splitlines():
+        tokens = line.split(None, 5)
+        if len(tokens) != 5:
+            continue
+        image = tokens[4]
+        if not ':' in image:
+            continue
+        imagel.append(_entry_to_tuple(image))
+    return imagel
+
+
+def image_select_best(image, available_images, arch_default):
+    image_spec = _entry_to_tuple(image)
+
+    arch = image_spec[4]
+    if arch == "":
+        arch = arch_default
+
+    # filter which images have arch or no arch spec
+    available_images = filter(lambda x: x[4] == arch, available_images)
+    if not available_images:
+        raise tcfl.tc.blocked_e(
+            "can't find image for architecture %s "
+            "in list of available image" % arch,
+            dict(images_available = \
+                 "\n".join([ ":".join(i) for i in available_images ])
+            )
+        )
+
+    # filter first based on the distro (first field)
+    distro = image_spec[0]
+    if distro == "":
+        distro_images = available_images
+    else:
+        distro_images = filter(lambda x: x[0] == distro, available_images)
+
+    # now filter based on the distro spin; if none, well, pick one at random
+    spin = image_spec[1]
+    if spin == "":
+        spin_images = distro_images
+    else:
+        spin_images = filter(lambda x: x[1] == spin, distro_images)
+
+    # now filter based on version -- rules change here -- if there is
+    # no version specified, pick what seems to be the most recent
+    # (highest)
+    version = image_spec[2]
+    if version == "":
+        versions = sorted([
+            (distutils.version.LooseVersion(i[2]) if i[2] != ""
+             else distutils.version.LooseVersion('0'))
+            for i in spin_images
+        ])
+        version = versions[-1]
+    version_images = filter(
+        lambda x: (
+            distutils.version.LooseVersion(x[2] if x[2] != "" else '0')
+            == version
+        ),
+        spin_images)
+    if not version_images:
+        raise tcfl.tc.blocked_e(
+            "can't find image match for version %s "
+            "in list of available images" % version,
+            dict(images_available =
+                 "\n".join([ ":".join(i) for i in version_images ])
+            )
+        )
+
+    # now filter based on subversion -- rules change here -- if there is
+    # no subversion specified, pick what seems to be the most recent
+    # (highest)
+    subversion = image_spec[3]
+    if subversion == "":
+        subversions = sorted([
+            (distutils.version.LooseVersion(i[3]) if i[3] != ""
+             else distutils.version.LooseVersion('0'))
+            for i in version_images
+        ])
+        subversion = subversions[-1]
+    subversion_images = filter(
+        lambda x: (
+            distutils.version.LooseVersion(x[3] if x[3] != "" else '0')
+            == subversion
+        ),
+        version_images)
+    if not subversion_images:
+        raise tcfl.tc.blocked_e(
+            "can't find image match for sub-version %s "
+            "in list of available images" % subversion,
+            dict(images_available =
+                 "\n".join([ ":".join(i) for i in subversion_images ])
+            )
+        )
+    # we might have multiple image choices if distro or live image
+    # weren't specified, so pick one
+    return random.choice(subversion_images)
+
 
 def _root_part_select(target, image, boot_dev, root_part_dev):
     # what is out root device?
@@ -582,6 +694,11 @@ def deploy_image(ic, target, image,
       - clear:live:25550::x86_64
       - yocto:core-image-minimal:2.5.1::x86
 
+      Note that you can specify a partial image name and the closest
+      match to it will be selected. From the previous example, asking
+      for *fedora* would auto select *fedora:workstation:28::x86_64*
+      assuming the target supports the *x86_64* target.
+
     :param str boot_dev: (optional) which is the boot device to use,
       where the boot loader needs to be installed in a boot
       partition. e.g.: ``sda`` for */dev/sda* or ``mmcblk01`` for
@@ -606,6 +723,9 @@ def deploy_image(ic, target, image,
 
       the function will be passed keywords which contain values found
       out during this execution
+
+    :returns str: name of the image that was deployed (in case it was
+      guessed)
 
     FIXME:
      - fix to autologing serial console?
@@ -763,10 +883,21 @@ def deploy_image(ic, target, image,
                 dict(target = target))
 
         if image:
-            target.report_info("POS: rsyncing %(image)s from "
-                               "%(rsync_server)s to /mnt" % kws)
+            original_timeout = testcase.tls.expecter.timeout
             try:
-                original_timeout = testcase.tls.expecter.timeout
+                image_list_output = target.shell.run(
+                    "rsync %(rsync_server)s/" % kws, output = True)
+                images_available = image_list_from_rsync_output(
+                    image_list_output)
+                # Do we have that image? autocomplete missing fields
+                # and get us a good match if so
+                image_final = image_select_best(image, images_available,
+                                                target.bsp_model)
+                kws['image'] = ":".join(image_final)
+                target.report_info("POS: rsyncing %(image)s from "
+                                   "%(rsync_server)s to /mnt" % kws,
+                                   dlevel = -1)
+
                 testcase.tls.expecter.timeout = 800
                 target.shell.run(
                     "time rsync -aAX --numeric-ids --delete "
@@ -806,6 +937,7 @@ def deploy_image(ic, target, image,
         target.shell.run("umount /mnt")
 
     target.report_info("POS: deployed %(image)s to %(root_part_dev)s" % kws)
+    return kws['image']
 
 
 def mk_persistent_tcf_d(target, subdirs = None):
