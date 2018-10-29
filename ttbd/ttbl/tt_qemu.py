@@ -337,7 +337,7 @@ class tt_qemu(
                   "uninitialized key %s" % e
             self.log.error(msg)
             commonl.raise_from(RuntimeError(msg), e)
-        self.log.error("DEBUG QEMU cmdline %s" % " ".join(qemu_cmdline))
+        self.log.debug("QEMU cmdline %s" % " ".join(qemu_cmdline))
         self.tags['bsps'][bsp]['cmdline'] = " ".join(qemu_cmdline)
         try:
             _preexec_fn = getattr(self, "qemu_preexec_fn", None)

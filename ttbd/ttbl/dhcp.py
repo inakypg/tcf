@@ -1,6 +1,9 @@
 #! /usr/bin/python2
 #
-# All notes and documentation go to afapli/README.rst
+# Copyright (c) 2018 Intel Corporation
+#
+# SPDX-License-Identifier: Apache-2.0
+#
 
 import os
 import pwd
