@@ -1,4 +1,4 @@
-#! /usr/bin/python
+#! /usr/bin/python2
 
 import os
 import re
@@ -7,6 +7,7 @@ import subprocess
 import tcfl.tc
 import tcfl.tl
 import tcfl.pos
+
 
 @tcfl.tc.interconnect("pos_rsync_server", mode = "all")
 class _(tcfl.tc.tc_c):
@@ -28,11 +29,13 @@ class _(tcfl.tc.tc_c):
         # ...
         #
         # so we parse for 5 fields, take last
-        for line in output.splitlines():
-            tokens = line.split(None, 5)
-            if len(tokens) != 5:
-                continue
-            image = tokens[4]
-            if not ':' in image:
-                continue
-            print ic.fullid, image
+        imagel = tcfl.pos.image_list_from_rsync_output(output)
+        for image in imagel:
+            print ic.fullid, ":".join(image)
+
+        image = os.environ.get("IMAGE", None)
+        if image:
+            d = {}
+            for _image in imagel:
+                d[_image] = _image
+            print image, tcfl.pos._seed_match(d, image)
