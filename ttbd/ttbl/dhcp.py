@@ -227,10 +227,8 @@ subnet6 %(if_net)s/%(if_len)s {
         # FIXME: This leaves a gap, as targets in other servers could
         # be connected to this network. Sigh.
         for target_id, target in ttbl.config.targets.iteritems():
-            self.target.log.error("DEBUG checking %s", target_id)
             interconnects = target.tags.get('interconnects', {})
             for ic_id, interconnect in interconnects.iteritems():
-                self.target.log.error("DEBUG checking ic %s", ic_id)
                 if ic_id != self.target.id:
                     continue
                 mac_addr = interconnect.get('mac_addr', None)
