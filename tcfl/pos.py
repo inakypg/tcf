@@ -927,6 +927,7 @@ def deploy_image(ic, target, image,
             target.report_info("POS: configuring bootloader")
             boot_config(target, root_part_dev_base)
         target.shell.run("sync")
+        target.shell.run("umount /mnt")
         # Now setup the local boot loader to boot off that
         target.property_set("pos_mode", "local")
     except Exception as e:
@@ -934,7 +935,10 @@ def deploy_image(ic, target, image,
                            (type(e).__name__, e, traceback.format_exc()))
         raise
     finally:
-        target.shell.run("umount /mnt")
+        # don't fail if this fails, as it'd trigger another exception
+        # and hide whatever happened that make us fail. Just make a
+        # good hearted attempt at cleaning up
+        target.shell.run("umount -l /mnt || true")
 
     target.report_info("POS: deployed %(image)s to %(root_part_dev)s" % kws)
     return kws['image']
@@ -1022,7 +1026,9 @@ timeout = 60
 uid = root
 gid = root
 EOF""")
-    target.shell.run("rsync --port 3000 --daemon --config /tmp/rsync.conf")
+    target.shell.run("rsync --port 3000 --daemon --no-detach --config /tmp/rsync.conf &")
+    # rsync makes no pids and we might not have killall in the POS
+    target.shell.run("echo $! > /tmp/rsync.pid")
     target.tunnel.ip_addr = target.addr_get(ic, "ipv4")
     target.kw_set('rsync_port', target.tunnel.add(3000))
     target.kw_set('rsync_server', target.rtb.parsed_url.hostname)
@@ -1042,21 +1048,23 @@ EOF""")
     # upload the kernel to the persistent area
     target.shcmd_local(
         "time rsync -aAX --numeric-ids --delete --port %(rsync_port)s "
-        "%(pos_deploy_linux_kernel_tree)s/boot/. "
+        "-vv %(pos_deploy_linux_kernel_tree)s/boot/. "
         "%(rsync_server)s::rootfs/persistent.tcf.d/boot/.")
     target.testcase._targets_active()
     target.report_info("rsyncing lib/modules to target")
     target.shcmd_local(
         "time rsync -aAX --numeric-ids --delete --port %(rsync_port)s "
-        "%(pos_deploy_linux_kernel_tree)s/lib/modules/. "
+        "-vv %(pos_deploy_linux_kernel_tree)s/lib/modules/. "
         "%(rsync_server)s::rootfs/persistent.tcf.d/lib/modules/.")
-    # Now move it from the persistent area to its final location
+    # remember we started rsync in the target? we can kill it now
+    target.shell.run("kill -9 $(cat /tmp/rsync.pid)")
+    # Now move it from the persistent area to its final location,
     target.testcase._targets_active()
     target.shell.run(
-        "rsync -aAX --delete /mnt/persistent.tcf.d/boot/. /mnt/boot/.")
+        "rsync -vvaAX --delete /mnt/persistent.tcf.d/boot/. /mnt/boot/.")
     target.testcase._targets_active()
     target.shell.run(
-        "rsync -aAX --delete /mnt/persistent.tcf.d/lib/modules/. "
+        "rsync -vvaAX --delete /mnt/persistent.tcf.d/lib/modules/. "
         "/mnt/lib/modules/.")
     target.testcase._targets_active()
     target.report_pass("linux kernel transferred")
