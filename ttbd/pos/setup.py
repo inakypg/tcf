@@ -24,16 +24,17 @@ import distutils.sysconfig
 import setupl
 
 distutils.core.setup(
-    name = 'ttbd-afapli',
-    description = "TCF TTBD server AFAPLI extensions",
+    name = 'ttbd-pos',
+    description = "TCF TTBD server Provisioning OS extensions",
     long_description = """\
 These are the extensions to the TTBD server that enable to do fast
 imaging on PC-class targets via DHCP / TFTP.
 """,
     version = setupl.version,
-    url = None,
+    url = "http://intel.github.com/tcf",
     author = "Inaky Perez-Gonzalez",
     author_email = "inaky.perez-gonzalez@intel.com",
+    # This package is just providining dependencies
     packages = [ ],
     scripts = [ ],
     data_files = [ ],

@@ -176,6 +176,10 @@ rpms-ttbd-zephyr:
 	mkdir -p $(RPMDIR)
 	cd ttbd/zephyr && VERSION=$(VERSION) python ./setup.py bdist_rpm --quiet $(BDIST_OPTS)
 
+rpms-ttbd-pos:
+	mkdir -p $(RPMDIR)
+	cd ttbd/pos && VERSION=$(VERSION) python ./setup.py bdist_rpm --quiet $(BDIST_OPTS)
+
 rpms-ttbd:
 	mkdir -p $(RPMDIR)
 	cd ttbd && VERSION=$(VERSION) python ./setup.py bdist_rpm $(BDIST_OPTS)
