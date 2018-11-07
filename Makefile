@@ -196,4 +196,4 @@ rpms-tcf:
 	mkdir -p $(RPMDIR)
 	VERSION=$(VERSION) python ./setup.py bdist_rpm --quiet $(BDIST_OPTS)
 
-rpms: rpms-tcf rpms-tcf-zephyr rpms-tcf-sketch rpms-ttbd rpms-ttbd-zephyr
+rpms: rpms-tcf rpms-tcf-zephyr rpms-tcf-sketch rpms-ttbd rpms-ttbd-zephyr rpms-ttbd-pos
