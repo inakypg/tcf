@@ -37,5 +37,7 @@ imaging on PC-class targets via DHCP / TFTP.
     # This package is just providining dependencies
     packages = [ ],
     scripts = [ ],
-    data_files = [ ],
+    data_files = [
+        ( '/etc/systemd/system/ttbd@.service.d/', [ 'pos.conf'] ),
+    ],
 )
