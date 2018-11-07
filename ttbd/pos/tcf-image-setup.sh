@@ -70,6 +70,8 @@ root_part=""
 base=$(basename $image_file)
 if [ -z "$image_type" ]; then
     case "$base" in
+        Fedora-Workstation-Live-*.iso)
+            image_type=fedoralive;;
         # clear, yocto core image minimal
         clear*)
             image_type=clear;;
@@ -97,7 +99,7 @@ case "$image_type" in
         boot_part=p1
         root_part=p2
         ;;
-    fedora)
+    fedoralive)
         root_part=p1
         ;;
     rootfswic)
@@ -116,9 +118,26 @@ info loop device $loop_dev
 lsblk $loop_dev
 
 mkdir $tmpdir/root
-sudo mount ${loop_dev}${root_part} $tmpdir/root
+
+if [ $image_type == fedoralive ]; then
+    mkdir -p $tmpdir/iso $tmpdir/squashfs
+    sudo mount -o loop ${loop_dev}p1 $tmpdir/iso
+    mounted_dirs="$tmpdir/iso ${mounted_dirs:-}"
+    info mounted ${loop_dev}${root_part} in $tmpdir/iso
+
+    sudo mount -o loop $tmpdir/iso/LiveOS/squashfs.img $tmpdir/squashfs
+    mounted_dirs="$tmpdir/squashfs ${mounted_dirs:-}"
+    info mounted $tmpdir/iso/LiveOS/squashfs.img in $tmpdir/squashfs
+
+    sudo mount -o loop $tmpdir/squashfs/LiveOS/rootfs.img $tmpdir/root
+    mounted_dirs="$tmpdir/root ${mounted_dirs:-}"
+    info mounted $tmpdir/squashfs/LiveOS/rootfs.img in $tmpdir/root
+else
+    sudo mount ${loop_dev}${root_part} $tmpdir/root
+    info mounted ${loop_dev}${root_part} in $tmpdir/root
+fi
+
 mounted_dirs="${mounted_dirs:-} $tmpdir/root"
-info mounted ${loop_dev}${root_part} in $tmpdir/root
 
 if ! [ -z "$boot_part" ]; then
     # clear does this
@@ -155,7 +174,7 @@ for shadow_file in \
 done
 
 case $image_type in
-    fedora|clear)
+    fedora*|clear)
         # Harcode enable getty on ttyUSB0 (FIXME: maybe do in the
         # setup script?) -- it doesn't autostart it from /proc/cmdline
         # because by the time we boot, ttyUSB0 hasb't been detected
