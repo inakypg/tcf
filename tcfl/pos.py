@@ -207,6 +207,9 @@ def _linux_boot_guess(target):
         return kernel, initrd, options
     kernel, initrd, options = _linux_boot_guess_from_boot(target)
     if kernel:
+        target.report_info("POS: guessed kernel from /boot directory: "
+                           "kernel %s initrd %s options %s"
+                           % (kernel, initrd, options))
         return kernel, initrd, options
     return None, None, None
 
@@ -372,7 +375,7 @@ def boot_config(target, root_part_dev,
 
     # mkfs.vfat /boot, mount it
     target.report_info("mounting %(boot_part_dev)s in /boot" % kws)
-    target.shell.run("mkfs.vfat -F32 /dev/%(boot_part_dev)s" % kws)
+    target.shell.run("mkfs.fat -F32 /dev/%(boot_part_dev)s" % kws)
     target.shell.run("sync")
     target.shell.run("mount /dev/%(boot_part_dev)s /boot" % kws)
     target.shell.run("mkdir -p /boot/loader/entries")
@@ -399,15 +402,17 @@ EOF
     # use dd instead of cp, it won't ask to override and such
     target.shell.run("dd if=/mnt/boot/%(linux_kernel_file)s "
                      "of=/boot/%(linux_kernel_file_basename)s" % kws)
+    # remember paths to the bootloader are relative to /boot
     target.shell.run("""\
 cat <<EOF > /boot/loader/entries/tcf-boot.conf
 title TCF-driven local boot
 linux /%(linux_kernel_file_basename)s
 EOF
 """ % kws)
-    if kws.get(linux_initrd_file, None):
+    if kws.get("linux_initrd_file", None):
         target.shell.run("dd if=/mnt/boot/%(linux_initrd_file)s "
                          "of=/boot/%(linux_initrd_file_basename)s" % kws)
+    # remember paths to the bootloader are relative to /boot
         target.shell.run("""\
 cat <<EOF >> /boot/loader/entries/tcf-boot.conf
 initrd /%(linux_initrd_file_basename)s
