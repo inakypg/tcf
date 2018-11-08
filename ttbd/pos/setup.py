@@ -39,5 +39,11 @@ imaging on PC-class targets via DHCP / TFTP.
     scripts = [ ],
     data_files = [
         ( '/etc/systemd/system/ttbd@.service.d/', [ 'pos.conf'] ),
+        ('@prefix@/share/tcf/', [
+            'tcf-image-setup.sh',
+        ]),
+        ('@prefix@/share/tcf/live', [
+            'tcf-live-boot_domain.pkgs'
+        ]),
     ],
 )
