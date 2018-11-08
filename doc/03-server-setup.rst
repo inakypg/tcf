@@ -492,8 +492,8 @@ follow are configuration examples.
 
 .. _ttbd_config_phys_linux:
 
-Configure physical Linux targets
---------------------------------
+Configure physical Linux (or other) targets
+-------------------------------------------
 
 There are multiple ways a Linux target can be connected as a target to
 a TCF server. However, dependending on the intended use, different
@@ -502,7 +502,9 @@ configuration steps can be followed:
 
 - A Linux target can be setup to :ref:`just power on and off
   <tt_linux_simple>`.
-       
+
+  This provides no control over the OS installed in the target
+  
 - A Linux target can be setup to boot off a read-only live filesystem
   (to avoid modifications to the root filesystem) following
   :ref:`these steps <ttbd_config_phys_linux_live>`.
@@ -510,6 +512,17 @@ configuration steps can be followed:
   Serial access to a console can be provided and through it networking
   can be configured.
 
+- A PC-class machine can be setup so that via the control of a
+  Provisioning OS, it can be imaged to partition disks or install
+  whichever operating systems in the disks.
+
+  This allows testcases to start by ensuring the machine is properly
+  imaged to a well known setup before starting.
+
+  POS imaging can allow for very fast deployment times (below 1
+  minute) to fresh OS versions. It requires a more complex setup that
+  depends on the characteristics of the machines to support and it is
+  described :ref:`here <pos_setup>`.
 
 Configuring things that get plugged to the targets
 --------------------------------------------------
@@ -761,3 +774,222 @@ Once a target is configured in, run a quick healthcheck::
 
       place links to configuration of network infrastructure (switches
       and interfaces)
+
+.. _pos_setup:
+
+Configuring Provisioning OS support
+-----------------------------------
+
+POS needs, depending on the setup:
+
+- targets able to UEFI boot via PXE to the network
+
+  these targets will boot POS over PXE, with the root filesystem in an
+  NFS drive
+  
+- a network interconnect to which the target(s) have to be connected,
+  as well as the server
+  
+- a server acting as an rsync server to provide images to flash into
+  targets; this is usually the same as the TTBD server (for
+  simplicity) the interconnect between the rsync server and the
+  targets needs to be at least 1Gbps to provide the needed performance
+  that will allow to flash a 1G image in less than one minute on a
+  normal harddrive.
+
+  Optional: use glusterfs to coordinate the distribution of images to
+  all the servers FIXME
+
+- A server providing:
+
+  - the POS linux kernel and initrd over HTTP for targets to boot from
+    PXE
+  - the POS image over NFS root for the targets to boot
+
+  this can also be the TTBD server for simplicity and scalability.
+    
+Current known POS limitations:
+
+- Only UEFI PXE boot supported
+- Single partitioning scheme supported
+
+Server setup
+^^^^^^^^^^^^
+
+These instructions are for Fedora only; other distributions have not
+been tested yet, shall be similar.
+
+1. Install the auxiliary package ``ttbd-pos`` to bring in all the
+   required dependencies::
+
+     # dnf install -y --allowerasing ttbd-pos
+
+2. Configure an image repository (FIXME: add in glusterfs steps); we
+   choose ``/home/ttbd/images`` but any other location will do::
+
+     # install -o ttbd -g ttbd -m 2775 -d /home/ttbd /home/ttbd/images /home/ttbd/public_html
+
+   Ensure your user is member of the ``ttbd`` group before doing
+   this::
+
+     # usermod -gA ttbd YOURUSER
+
+   you will have to re-login for changes to take effect.
+     
+3. Disable the firewall (FIXME: do not require this)::
+
+     # systemctl stop firewalld
+     # systemctl disable firewalld
+
+4. Enable required services:
+
+   - Apache: to serve the POS Linux kernel and initrd::
+
+       # cat > /etc/httpd/conf.d/ttbd.conf <<EOF
+       Alias "/ttbd-pos" "/home/ttbd/public_html"
+
+       <Directory "/home/ttbd/public_html">
+       AllowOverride FileInfo AuthConfig Limit Indexes
+       Options MultiViews Indexes SymLinksIfOwnerMatch IncludesNoExec
+       Require method GET POST OPTIONS
+       </Directory>
+       EOF
+       # systemctl enable httpd
+       # systemctl restart httpd
+
+     SELinux requires setting a few more things to enable serving from
+     home directories::
+
+       # setsebool -P httpd_enable_homedirs true
+       # chcon -R -t httpd_sys_content_t /home/ttbd/public_html
+
+     Test this is working::
+
+       # echo "it works" > /home/ttbd/public_html/testfile
+
+     from any other browser try to access
+     http://YOURSERVERNAME/ttbd-pos/testfile and check it succeeds.
+       
+     FIXME: move ttbd.conf file as a config file in package
+     ``ttbd-pos``.
+
+   - TFTP server: provides targets with boot configuration to launch
+     PXE::
+
+       # systemctl enable tftp
+       # systemctl start tftp
+
+   - NFS server: provides the POS root filesystem.
+
+     a. Ensure UDP support is enabled::
+
+          # sed -i 's|RPCNFSDARGS="|RPCNFSDARGS="--udp |' /etc/sysconfig/nfs
+          # systemctl enable nfs-server
+          # systemctl restart nfs-server
+
+5. POS: deploy POS image to HTTP and NFS server locations
+
+   Currently the Provisioning OS is implemented with a derivative of
+   Fedora Linux.
+
+   a. Generate TCF-live on the fly::
+     
+        $ /usr/share/tcf/live/mk-liveimg.sh
+     
+      Note:
+
+      - needs sudo access; will ask for your password to gain *sudo* when
+        needed
+
+      - downloads ~300 packages to create a Fedora-based image, so make
+        sure you have a good connection and plenty of disk space free.
+
+        It will be cached in directory *tcf-live* so next time you run
+        less needs to be downloaded.
+
+        To use a closer mirror to you or add extra RPM repositories::
+
+          $ mdkir tcf-live
+          $ cat > tcf-live/tcf-live-mirror.ks <<EOF
+          # Repos needed to pick up TCF internal RPMs
+          repo --name=EXTRAREPO --baseurl=https://LOCATION/SOMEWHERE
+          # internal mirrors for getting RPMs
+          repo --name=fedora-local --cost=-100 --baseurl=http://MIRROR/fedora/linux/releases/$releasever/Everything/$basearch/os/
+          repo --name=updates-local --cost=-100 --baseurl=http://MIRROR/fedora/linux/releases/$releasever/Everything/$basearch/os/
+          EOF
+
+   b. Extract the root file system from the ISO image to the
+      ``/home/ttbd/images`` directory; this is where the NFS server
+      will read-only root serve it from and also we'll be able to use
+      it to flash targets::
+
+        $ /usr/share/tcf/tcf-image-setup.sh /home/ttbd/images/tcf:live:0::x86_64 tcf-live/tcf-live.iso
+        I: loop device /dev/loop0
+        NAME      MAJ:MIN RM  SIZE RO TYPE MOUNTPOINT
+        loop0       7:0    0  419M  0 loop
+        └─loop0p1 259:0    0  419M  0 loop
+        mount: /home/LOGIN/tcf-image-setup.sh-XEqBHG/iso: WARNING: device write-protected, mounted read-only.
+        I: mounted /dev/loop0p1 in tcf-image-setup.sh-XEqBHG/iso
+        I: mounted tcf-image-setup.sh-XEqBHG/iso/LiveOS/squashfs.img in tcf-image-setup.sh-XEqBHG/squashfs
+        I: mounted tcf-image-setup.sh-XEqBHG/squashfs/LiveOS/ext3fs.img in tcf-image-setup.sh-XEqBHG/root
+        I: created tcf:live:0::x86_64, transferring
+        I: tcf:live:0::x86_64: diffing verification
+        File tcf-image-setup.sh-XEqBHG/root/./dev/full is a character special file while file tcf:live:0::x86_64/.
+        /dev/full is a character special file
+        ...
+        File tcf-image-setup.sh-XEqBHG/root/./dev/zero is a character special file while file tcf:live:0::x86_64/.
+        /dev/zero is a character special file
+        I: unmounting tcf-image-setup.sh-XEqBHG/root
+        I: unmounting tcf-image-setup.sh-XEqBHG/squashfs
+        I: unmounting tcf-image-setup.sh-XEqBHG/iso
+        I: unmounting tcf-image-setup.sh-XEqBHG/root
+        umount: tcf-image-setup.sh-XEqBHG/root: not mounted.
+
+      (most of those warning messages during verification can be ignored)
+
+   c. Make the kernel and initrd for POS available via Apache for
+      PXE-over-HTTP booting::
+
+        # ln /home/ttbd/images/tcf:live:0::x86_64/boot/vmlinuz-* /home/ttbd/public_html/vmlinuz-tcf-live-0
+        # ln /home/ttbd/images/tcf:live:0::x86_64/boot/initramfs-* /home/ttbd/public_html/initramfs-tcf-live-0
+        # sudo chmod 0644 /home/ttbd/public_html/*
+
+      Ensure those two files work by pointing a browser to
+      http://YOURSERVERNAME/ttbd-pos/ and verifying they can be downloaded.
+        
+   b. FIXME: deploy tcf-live image to /home/ttbd/images/tcf-live
+
+Deploying other images
+~~~~~~~~~~~~~~~~~~~~~~
+
+Image naming follows the format::
+
+ DISTRO:SPIN:VERSION:SUBVERSION:ARCH
+
+it is valid to leave any fields empty except for the DISTRO and ARCH
+fields; valid examples::
+
+  - clear:live:25930::x86_64
+  - yocto:core-image-minimal:2.5.1::x86_64
+  - fedora:live:29::x86_64
+  - fedora:workstation:29::x86_64
+
+The script ``/usr/share/tcf/tcf-image-setup.sh`` will take an image
+from different OSes and extract it so it can be used to be flashed via
+POS; for example:
+
+- Clearlinux::
+
+    $ wget https://download.clearlinux.org/releases/25930/clear/clear-25930-live.img.xz
+    $ /usr/share/tcf/tcf-image-setup.sh /home/ttbd/images/clear:live:25930::x86_64 clear-25930-live.img.xz
+
+- Yocto::
+
+    $ wget http://downloads.yoctoproject.org/releases/yocto/yocto-2.5.1/machines/genericx86-64/core-image-minimal-genericx86-64.wic
+    $ /usr/share/tcf/tcf-image-setup.sh yocto:core-image-minimal:2.5.1::x86_64 core-image-minimal-genericx86-64.wic
+
+  
+Configuring networks and targets
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+FIXME
