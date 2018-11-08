@@ -34,15 +34,19 @@ imaging on PC-class targets via DHCP / TFTP.
     url = "http://intel.github.com/tcf",
     author = "Inaky Perez-Gonzalez",
     author_email = "inaky.perez-gonzalez@intel.com",
-    # This package is just providining dependencies
+    cmdclass = dict(
+        install_data = setupl._install_data,
+    ),
     packages = [ ],
     scripts = [ ],
     data_files = [
-        ( '/etc/systemd/system/ttbd@.service.d/', [ 'pos.conf'] ),
-        ('@prefix@/share/tcf/', [
+        ( 'etc/systemd/system/ttbd@.service.d/', [
+            'pos.conf'
+        ]),
+        ( '@prefix@/share/tcf/', [
             'tcf-image-setup.sh',
         ]),
-        ('@prefix@/share/tcf/live', [
+        ( '@prefix@/share/tcf/live', [
             'tcf-live-boot_domain.pkgs'
         ]),
     ],
