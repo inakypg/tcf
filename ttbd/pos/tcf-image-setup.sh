@@ -59,7 +59,7 @@ function cleanup() {
     fi
 }
 
-if echo $image_file | grep \.xz$; then
+if echo $image_file | grep -q \.xz$; then
     info decompressing $image_file
     xz -kd $image_file
     image_file=${image_file%%.xz}
@@ -70,6 +70,8 @@ root_part=""
 base=$(basename $image_file)
 if [ -z "$image_type" ]; then
     case "$base" in
+        tcf-live.iso)
+            image_type=tcflive;;
         Fedora-Workstation-Live-*.iso)
             image_type=fedoralive;;
         # clear, yocto core image minimal
@@ -99,7 +101,7 @@ case "$image_type" in
         boot_part=p1
         root_part=p2
         ;;
-    fedoralive)
+    fedoralive|tcflive)
         root_part=p1
         ;;
     rootfswic)
@@ -119,7 +121,7 @@ lsblk $loop_dev
 
 mkdir $tmpdir/root
 
-if [ $image_type == fedoralive ]; then
+if [ $image_type == fedoralive -o $image_type == tcflive ]; then
     mkdir -p $tmpdir/iso $tmpdir/squashfs
     sudo mount -o loop ${loop_dev}p1 $tmpdir/iso
     mounted_dirs="$tmpdir/iso ${mounted_dirs:-}"
@@ -129,9 +131,17 @@ if [ $image_type == fedoralive ]; then
     mounted_dirs="$tmpdir/squashfs ${mounted_dirs:-}"
     info mounted $tmpdir/iso/LiveOS/squashfs.img in $tmpdir/squashfs
 
-    sudo mount -o loop $tmpdir/squashfs/LiveOS/rootfs.img $tmpdir/root
+    if [ $image_type == fedoralive ]; then
+        sudo mount -r -o loop $tmpdir/squashfs/LiveOS/rootfs.img $tmpdir/root
+        info mounted $tmpdir/squashfs/LiveOS/rootfs.img in $tmpdir/root
+    elif [ $image_type == tcflive ]; then
+        # norecovery: if the ext3 fs has a dirty log, we don't want to do it now
+        sudo mount -o norecovery,loop $tmpdir/squashfs/LiveOS/ext3fs.img $tmpdir/root
+        info mounted $tmpdir/squashfs/LiveOS/ext3fs.img in $tmpdir/root
+    else
+        error BUG! Unknown image type for $image_type
+    fi
     mounted_dirs="$tmpdir/root ${mounted_dirs:-}"
-    info mounted $tmpdir/squashfs/LiveOS/rootfs.img in $tmpdir/root
 else
     sudo mount ${loop_dev}${root_part} $tmpdir/root
     info mounted ${loop_dev}${root_part} in $tmpdir/root
