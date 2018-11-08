@@ -854,8 +854,6 @@ been tested yet, shall be similar.
        Require method GET POST OPTIONS
        </Directory>
        EOF
-       # systemctl enable httpd
-       # systemctl restart httpd
 
      SELinux requires setting a few more things to enable serving from
      home directories::
@@ -872,12 +870,6 @@ been tested yet, shall be similar.
        
      FIXME: move ttbd.conf file as a config file in package
      ``ttbd-pos``.
-
-   - TFTP server: provides targets with boot configuration to launch
-     PXE::
-
-       # systemctl enable tftp
-       # systemctl start tftp
 
    - NFS server: provides the POS root filesystem.
 
