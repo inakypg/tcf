@@ -874,11 +874,11 @@ been tested yet, shall be similar.
 
    - NFS server: provides the POS root filesystem.
 
-     b. Ensure UDP support is enabled::
+     Ensure UDP support is enabled::
 
-          # sed -i 's|RPCNFSDARGS="|RPCNFSDARGS="--udp |' /etc/sysconfig/nfs
-          # systemctl enable nfs-server
-          # systemctl restart nfs-server
+       # sed -i 's|RPCNFSDARGS="|RPCNFSDARGS="--udp |' /etc/sysconfig/nfs
+       # systemctl enable nfs-server
+       # systemctl restart nfs-server
 
 6. POS: deploy POS image to HTTP and NFS server locations
 
