@@ -945,7 +945,7 @@ been tested yet, shall be similar.
 
         # ln /home/ttbd/images/tcf:live:0::x86_64/boot/vmlinuz-* /home/ttbd/public_html/vmlinuz-tcf-live
         # ln /home/ttbd/images/tcf:live:0::x86_64/boot/initramfs-* /home/ttbd/public_html/initramfs-tcf-live
-        # sudo chmod 0644 /home/ttbd/public_html/*
+        # chmod 0644 /home/ttbd/public_html/*
 
       Ensure those two files work by pointing a browser to
       http://YOURSERVERNAME/ttbd-pos/ and verifying they can be downloaded.
