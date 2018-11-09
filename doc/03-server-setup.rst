@@ -1181,7 +1181,7 @@ f. Optionally, you can implement port redirection.
                                vlan_pci(),
                                ttbl.pc.dlwps7('http://admin:1234@sp5/8'),
                                ttbl.dhcp.pci("192.168.97.1", "192.168.97.0", 24,
-                                             "192.168.97.10", "192.168.97.20"),
+                                             "192.168.97.2", "192.168.97.254"),
                                ttbl.dhcp.pci("fc00::61:1", "fc00::61:0", 112,
                                              "fc00::61:2", "fc00::61:fe", ip_mode = 6),
                                ttbl.rsync.pci("192.168.97.1", 'images',
