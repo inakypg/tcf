@@ -528,8 +528,9 @@ label localboot
 
     tftp_config_file_name = os.path.join(
         tftp_dir, tftp_prefix, "pxelinux.cfg",
-        # 01- is the ARP type 1 for ethernet
-        "01-" + mac_addr.replace(":", "-"))
+        # 01- is the ARP type 1 for ethernet; also note the PXE client
+        # asks with the hex digits in lower case.
+        "01-" + mac_addr.replace(":", "-").lower())
     with open(tftp_config_file_name, "w") as tf:
         tf.write(config)
         tf.flush()
