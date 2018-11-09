@@ -349,7 +349,8 @@ subnet6 %(if_net)s/%(if_len)s {
 
         # We set the parameters in a dictionary so we can use it to
         # format strings
-        # FIXME: FUGLY
+        # FUGLY; relies on ttbl.conf_00_lib.vlan_pci renaming the
+        # network interfaces like this.
         self._params['if_name'] = "b" + target.id
 
         # FIXME: if we get the parameters from the network here, we
