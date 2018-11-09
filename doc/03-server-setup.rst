@@ -1229,6 +1229,10 @@ All together, it shall look like:
    import ttbl.rsync
    import ttbl.socat
 
+   # Delete existing definition of the 'nwa' target created by the
+   # default initialization
+   del ttbl.config.targets['nwa']
+   
    ttbl.config.interconnect_add(
        ttbl.tt.tt_power(
            'nwa',
