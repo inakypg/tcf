@@ -15,12 +15,12 @@ import commonl
 import ttbl
 import ttbl.config
 
-# FIXME: config setting ttbd-staging
-tftp_prefix = "ttbd-staging"
-# FIXME config setting
+#: Directory where the TFTP tree is located
 tftp_dir = "/var/lib/tftpboot"
-# FIXME config setting
+#: Directory where the syslinux tree is located
 syslinux_path = "/usr/share/syslinux"
+
+tftp_prefix = "ttbd" + ttbl.config.instance_suffix
 
 class pci(ttbl.tt_power_control_impl):
 
