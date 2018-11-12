@@ -961,6 +961,7 @@ c. Make the kernel and initrd for POS available via Apache for
    iii. Make everything readable to the public::
 
           # chmod 0644 /home/ttbd/public_html/*
+          # chcon -R -t httpd_sys_content_t /home/ttbd/public_html
 
    Ensure those two files work by pointing a browser to
    http://YOURSERVERNAME/ttbd-pos/ and verifying they can be downloaded.
