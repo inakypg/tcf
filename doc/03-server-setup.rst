@@ -602,9 +602,9 @@ target is connected::
 
   TYPE-NNx
 
-- *TYPE*: name that describes the type of the target
+- *TYPE*: a short name that describes the type of the target
 
-  e.g.: *arduino2*, *minnowboard*, *genericpc*...
+  e.g.: *arduino2*, *minnowboard*, *arduino101*, *nuc*, *genericpc*...
 
 - *NN* is a number that is increased monotonically for each target
   added to the infrastructure, even of different types:
@@ -624,8 +624,9 @@ target is connected::
 
 examples:
 
-  - *arduino101-03*:
+  - *arduino101-03*
   - *minnowboard-04r*
+  - *nuc-58a*
 
 
 Configuration Example 1
@@ -1398,19 +1399,12 @@ network *nwa* so it can be flashed with POS.
    
 **Configuring the system for the target**
 
-1. Pick up a target name that:
+1. Pick up a :ref:`target name <bp_naming_targets>`.
 
-   - reflects the type of hardware
-   - is short
-   - has a number that monotonically increases for each target
-   - indicates which network it is connected to
-  
    For this example, we picked ``nuc5-58a``, the number 58 is then
    used to decide the IP address that is assigned to this target
    (192.168.97.58) on network *a* (as :ref:`defined
    above<ttbd_pos_network_config_numbers>`).
-
-   FIXME: we need a section on target naming practices
 
 2. Configure *udev* to add a name for the serial device for the
    target's serial console USB cable so it can be easily found at
