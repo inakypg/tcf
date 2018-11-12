@@ -161,6 +161,7 @@ subnet %(if_net)s netmask %(if_netmask)s {
                 # Point to the TFTP server, which is the same as this
                 next-server %(if_addr)s;
         }
+}
 """ % self._params)
 
         # Now, enumerate the targets that are in this local
@@ -178,15 +179,12 @@ subnet %(if_net)s netmask %(if_netmask)s {
                 ipv4_addr = interconnect.get('ipv4_addr', None)
                 if ipv4_addr and mac_addr:
                     f.write("""\
-        host %s {
-                hardware ethernet %s;
-                fixed-address %s;
-                option host-name "%s";
-        }
-""" % (target_id, mac_addr, ipv4_addr, target_id))
-        f.write("""\
+host %s {
+        hardware ethernet %s;
+        fixed-address %s;
+        option host-name "%s";
 }
-""")
+""" % (target_id, mac_addr, ipv4_addr, target_id))
 
 
     def _dhcp_conf_write_ipv6(self, f):
@@ -218,6 +216,7 @@ subnet6 %(if_net)s/%(if_len)s {
                 # Point to the TFTP server, which is the same as this
 #                next-server %(if_addr)s;
         }
+}
 """ % self._params)
 
         # Now, enumerate the targets that are in this local
@@ -235,16 +234,12 @@ subnet6 %(if_net)s/%(if_len)s {
                 ipv6_addr = interconnect.get('ipv6_addr', None)
                 if ipv6_addr and mac_addr:
                     f.write("""\
-        host %s {
-                hardware ethernet %s;
-                fixed-address6 %s;
-                option host-name "%s";
-        }
-""" % (target_id, mac_addr, ipv6_addr, target_id))
-
-        f.write("""\
+host %s {
+        hardware ethernet %s;
+        fixed-address6 %s;
+        option host-name "%s";
 }
-""")
+""" % (target_id, mac_addr, ipv6_addr, target_id))
 
     def _dhcp_conf_write(self):
         # Write DHCPD configuration
