@@ -30,47 +30,27 @@ class pci(ttbl.tt_power_control_impl):
     class start_e(error_e):
         pass
 
-    # Yeaaaaah, this is kinda overkill
-    class dhcpd_start_e(start_e):
-        pass
-
-    class tftpd_start_e(start_e):
-        pass
-
-
     dhcpd_path = "/usr/sbin/dhcpd"
-    tftpd_path = "/usr/sbin/in.tftpd"
 
     """
 
     This class implements a power control unit that can be made part
     of a power rail for a network interconnect.
 
-    When turned on, it would start daemons that provide services on
-    the network, like DHCP or TFTP.
+    When turned on, it would starts DHCP to provide on
+    the network.
 
     With a configuration such as::
 
       import ttbl.dhcp
 
-      ttbl.config.targets['nwa'].pc_impl.append(ttbl.dhcp.pci(
-          "192.168.97.1",
-          "192.168.97.0", "255.255.255.0",
-          "192.168.97.10", "192.168.97.20",
-          {
-              "52:54:00:06:28:d7": dict(
-                  ipv4_addr = "192.168.97.13",
-                  Zephyr_minnow = dict(
-                      kernel = "/some/path/z/build-hello-world-minnowboard/zephyr/zephyr.bin"),
-              ),
-          }, debug = True))
+      ttbl.config.targets['nwa'].pc_impl.append(
+          ttbl.dhcp.pci("fc00::61:1", "fc00::61:0", 112,
+                        "fc00::61:2", "fc00::61:fe", ip_mode = 6)
+      )
 
-
-    .. warning:: this is incomplete!
-
-    - Ensure firewall is open for UDP 67, 68, 69
-    - FIXME: split in two PCIs, one DHCP, one TFTP, hook would be
-      needed for DHCP to know TFTP is up
+    It would start a DHCP IPv6 server on fc00::61:1, network
+    fc0)::61:0/112 serving IPv6 address from :2 to :fe.
     """
 
     def __init__(self,
@@ -117,7 +97,6 @@ class pci(ttbl.tt_power_control_impl):
         self.state_dir = None
         self.pxe_dir = None
         self.dhcpd_pidfile = None
-        self.tftpd_pidfile = None
 
     def _dhcp_conf_write_ipv4(self, f):
         # generate the ipv4 part
@@ -311,7 +290,7 @@ host %s {
 
     def power_on_do(self, target):
         """
-        Start DHCPd and TFTPd servers on the network interface
+        Start DHCPd servers on the network interface
         described by `target`
         """
         if self.target == None:
