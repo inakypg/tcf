@@ -4,13 +4,6 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-progname=$(basename $0)
-destdir=$1
-image_file=$2
-image_type=${3:-}
-tmpdir=${TMPDIR:-`mktemp -d $progname-XXXXXX`}
-
-trap cleanup EXIT
 
 function help() {
     cat <<EOF
@@ -28,6 +21,20 @@ Yocto:
 
 EOF
 }
+
+progname=$(basename $0)
+
+if [ $# -lt 2 -o $# -gt 3 ]; then
+    help 1>&2
+    exit 1
+fi
+
+destdir=$1
+image_file=$2
+image_type=${3:-}
+tmpdir=${TMPDIR:-`mktemp -d $progname-XXXXXX`}
+
+trap cleanup EXIT
 
 function info() {
     echo I: "$@" 1>&2
