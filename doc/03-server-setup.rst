@@ -941,11 +941,24 @@ been tested yet, shall be similar.
       (most of those warning messages during verification can be ignored)
 
    c. Make the kernel and initrd for POS available via Apache for
-      PXE-over-HTTP booting::
+      PXE-over-HTTP booting:
 
-        # ln /home/ttbd/images/tcf:live:0::x86_64/boot/vmlinuz-* /home/ttbd/public_html/vmlinuz-tcf-live
-        # ln /home/ttbd/images/tcf:live:0::x86_64/boot/initramfs-* /home/ttbd/public_html/initramfs-tcf-live
-        # chmod 0644 /home/ttbd/public_html/*
+      i. Copy the kernel::
+
+           # ln /home/ttbd/images/tcf:live:0::x86_64/boot/vmlinuz-* /home/ttbd/public_html/vmlinuz-tcf-live
+
+      ii. Regenerate the *initrd* with nfs-root support, as the initrd
+          generated does not have nfs-root enabled (FIXME: figure out
+          the configuration to enable it straight up)::
+
+            # dracut -v -k /home/ttbd/images/tcf:live:0::x86_64/lib/modules/* \
+                  --kernel-image /home/ttbd/images/tcf:live:0::x86_64/boot/vmlinuz-* \
+                  -m "nfs base network kernel-modules" \
+                  /home/ttbd/public_html/initramfs-tcf-live
+                  
+      iii. Make everything readable to the public::
+             
+             # chmod 0644 /home/ttbd/public_html/*
 
       Ensure those two files work by pointing a browser to
       http://YOURSERVERNAME/ttbd-pos/ and verifying they can be downloaded.
@@ -1055,9 +1068,9 @@ a. A network is usually defined, in a ``conf_10_NAME.py``
    This defines a target representing an interconnect, called ``nwa``,
    of type *ethernet* (vs let's way WiFi). It is sometimes also called
    a NUT (Network Under Test). This network defines a single power
-   control implementation, a :class:`vlan_pci` which will upon power
-   on/off create/teardown the internal piping for virtual macines to
-   be able to access said interconnect.
+   control implementation, a :class:`conf_00_lib.vlan_pci` which will
+   upon power on/off create/teardown the internal piping for virtual
+   macines to be able to access said interconnect.
 
    Note how we have assigned IP addresses to the network, which will
    be the ones the server connection to it will have. By setting the
