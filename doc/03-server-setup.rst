@@ -814,8 +814,8 @@ Current known POS limitations:
 - Only UEFI PXE boot supported
 - Single partitioning scheme supported
 
-Server setup
-^^^^^^^^^^^^
+POS: Server setup
+^^^^^^^^^^^^^^^^^
 
 These instructions are for Fedora only; other distributions have not
 been tested yet, shall be similar.
@@ -881,107 +881,108 @@ been tested yet, shall be similar.
        # systemctl enable nfs-server
        # systemctl restart nfs-server
 
-6. POS: deploy POS image to HTTP and NFS server locations
+POS: deploy PXE boot image to HTTP and NFS server locations
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-   Currently the Provisioning OS is implemented with a derivative of
-   Fedora Linux.
+Currently the Provisioning OS is implemented with a derivative of
+Fedora Linux.
 
-   a. Generate TCF-live on the fly::
+a. Generate TCF-live on the fly::
 
-        $ /usr/share/tcf/live/mk-liveimg.sh
+     $ /usr/share/tcf/live/mk-liveimg.sh
 
-      Note:
+   Note:
 
-      - needs sudo access; will ask for your password to gain *sudo* when
-        needed
+   - needs sudo access; will ask for your password to gain *sudo* when
+     needed
 
-      - downloads ~300 packages to create a Fedora-based image, so make
-        sure you have a good connection and plenty of disk space free.
+   - downloads ~300 packages to create a Fedora-based image, so make
+     sure you have a good connection and plenty of disk space free.
 
-        It will be cached in directory *tcf-live* so next time you run
-        less needs to be downloaded.
+     It will be cached in directory *tcf-live* so next time you run
+     less needs to be downloaded.
 
-        To use a closer mirror to you or add extra RPM repositories::
+     To use a closer mirror to you or add extra RPM repositories::
 
-          $ mdkir tcf-live
-          $ cat > tcf-live/tcf-live-mirror.ks <<EOF
-          # Repos needed to pick up TCF internal RPMs
-          repo --name=EXTRAREPO --baseurl=https://LOCATION/SOMEWHERE
-          # internal mirrors for getting RPMs
-          repo --name=fedora-local --cost=-100 --baseurl=http://MIRROR/fedora/linux/releases/$releasever/Everything/$basearch/os/
-          repo --name=updates-local --cost=-100 --baseurl=http://MIRROR/fedora/linux/releases/$releasever/Everything/$basearch/os/
-          EOF
+       $ mdkir tcf-live
+       $ cat > tcf-live/tcf-live-mirror.ks <<EOF
+       # Repos needed to pick up TCF internal RPMs
+       repo --name=EXTRAREPO --baseurl=https://LOCATION/SOMEWHERE
+       # internal mirrors for getting RPMs
+       repo --name=fedora-local --cost=-100 --baseurl=http://MIRROR/fedora/linux/releases/$releasever/Everything/$basearch/os/
+       repo --name=updates-local --cost=-100 --baseurl=http://MIRROR/fedora/linux/releases/$releasever/Everything/$basearch/os/
+       EOF
 
-   b. Extract the root file system from the ISO image to the
-      ``/home/ttbd/images`` directory; this is where the NFS server
-      will read-only root serve it from and also we'll be able to use
-      it to flash targets::
+b. Extract the root file system from the ISO image to the
+   ``/home/ttbd/images`` directory; this is where the NFS server
+   will read-only root serve it from and also we'll be able to use
+   it to flash targets::
 
-        $ /usr/share/tcf/tcf-image-setup.sh /home/ttbd/images/tcf:live:0::x86_64 tcf-live/tcf-live.iso
-        I: loop device /dev/loop0
-        NAME      MAJ:MIN RM  SIZE RO TYPE MOUNTPOINT
-        loop0       7:0    0  419M  0 loop
-        └─loop0p1 259:0    0  419M  0 loop
-        mount: /home/LOGIN/tcf-image-setup.sh-XEqBHG/iso: WARNING: device write-protected, mounted read-only.
-        I: mounted /dev/loop0p1 in tcf-image-setup.sh-XEqBHG/iso
-        I: mounted tcf-image-setup.sh-XEqBHG/iso/LiveOS/squashfs.img in tcf-image-setup.sh-XEqBHG/squashfs
-        I: mounted tcf-image-setup.sh-XEqBHG/squashfs/LiveOS/ext3fs.img in tcf-image-setup.sh-XEqBHG/root
-        I: created tcf:live:0::x86_64, transferring
-        I: tcf:live:0::x86_64: diffing verification
-        File tcf-image-setup.sh-XEqBHG/root/./dev/full is a character special file while file tcf:live:0::x86_64/.
-        /dev/full is a character special file
-        ...
-        File tcf-image-setup.sh-XEqBHG/root/./dev/zero is a character special file while file tcf:live:0::x86_64/.
-        /dev/zero is a character special file
-        I: unmounting tcf-image-setup.sh-XEqBHG/root
-        I: unmounting tcf-image-setup.sh-XEqBHG/squashfs
-        I: unmounting tcf-image-setup.sh-XEqBHG/iso
-        I: unmounting tcf-image-setup.sh-XEqBHG/root
-        umount: tcf-image-setup.sh-XEqBHG/root: not mounted.
+     $ /usr/share/tcf/tcf-image-setup.sh /home/ttbd/images/tcf:live:0::x86_64 tcf-live/tcf-live.iso
+     I: loop device /dev/loop0
+     NAME      MAJ:MIN RM  SIZE RO TYPE MOUNTPOINT
+     loop0       7:0    0  419M  0 loop
+     └─loop0p1 259:0    0  419M  0 loop
+     mount: /home/LOGIN/tcf-image-setup.sh-XEqBHG/iso: WARNING: device write-protected, mounted read-only.
+     I: mounted /dev/loop0p1 in tcf-image-setup.sh-XEqBHG/iso
+     I: mounted tcf-image-setup.sh-XEqBHG/iso/LiveOS/squashfs.img in tcf-image-setup.sh-XEqBHG/squashfs
+     I: mounted tcf-image-setup.sh-XEqBHG/squashfs/LiveOS/ext3fs.img in tcf-image-setup.sh-XEqBHG/root
+     I: created tcf:live:0::x86_64, transferring
+     I: tcf:live:0::x86_64: diffing verification
+     File tcf-image-setup.sh-XEqBHG/root/./dev/full is a character special file while file tcf:live:0::x86_64/.
+     /dev/full is a character special file
+     ...
+     File tcf-image-setup.sh-XEqBHG/root/./dev/zero is a character special file while file tcf:live:0::x86_64/.
+     /dev/zero is a character special file
+     I: unmounting tcf-image-setup.sh-XEqBHG/root
+     I: unmounting tcf-image-setup.sh-XEqBHG/squashfs
+     I: unmounting tcf-image-setup.sh-XEqBHG/iso
+     I: unmounting tcf-image-setup.sh-XEqBHG/root
+     umount: tcf-image-setup.sh-XEqBHG/root: not mounted.
 
-      (most of those warning messages during verification can be ignored)
+   (most of those warning messages during verification can be ignored)
 
-   c. Make the kernel and initrd for POS available via Apache for
-      PXE-over-HTTP booting:
+c. Make the kernel and initrd for POS available via Apache for
+   PXE-over-HTTP booting:
 
-      i. Copy the kernel::
+   i. Copy the kernel::
 
-           # ln /home/ttbd/images/tcf:live:0::x86_64/boot/vmlinuz-* /home/ttbd/public_html/vmlinuz-tcf-live
+        # ln /home/ttbd/images/tcf:live:0::x86_64/boot/vmlinuz-* /home/ttbd/public_html/vmlinuz-tcf-live
 
-      ii. Regenerate the *initrd* with nfs-root support, as the initrd
-          generated does not have nfs-root enabled (FIXME: figure out
-          the configuration to enable it straight up)::
+   ii. Regenerate the *initrd* with nfs-root support, as the initrd
+       generated does not have nfs-root enabled (FIXME: figure out
+       the configuration to enable it straight up)::
 
-            # dracut -v -k /home/ttbd/images/tcf:live:0::x86_64/lib/modules/* \
-                  --kernel-image /home/ttbd/images/tcf:live:0::x86_64/boot/vmlinuz-* \
-                  -m "nfs base network kernel-modules" \
-                  /home/ttbd/public_html/initramfs-tcf-live
-                  
-      iii. Make everything readable to the public::
-             
-             # chmod 0644 /home/ttbd/public_html/*
+         # dracut -v -k /home/ttbd/images/tcf:live:0::x86_64/lib/modules/* \
+               --kernel-image /home/ttbd/images/tcf:live:0::x86_64/boot/vmlinuz-* \
+               -m "nfs base network kernel-modules" \
+               /home/ttbd/public_html/initramfs-tcf-live
 
-      Ensure those two files work by pointing a browser to
-      http://YOURSERVERNAME/ttbd-pos/ and verifying they can be downloaded.
+   iii. Make everything readable to the public::
 
-   d. Make the POS root image available over NFS as read-only (note we
-      only export those images only, not all)::
+          # chmod 0644 /home/ttbd/public_html/*
 
-        # tee /etc/exports.d/ttbd-pos.exports <<EOF
-        /home/ttbd/images/tcf:live:0::x86_64 *(ro,no_root_squash)
-        EOF
-        # systemctl reload nfs-server
+   Ensure those two files work by pointing a browser to
+   http://YOURSERVERNAME/ttbd-pos/ and verifying they can be downloaded.
 
-      Verify the directory is exported::
+d. Make the POS root image available over NFS as read-only (note we
+   only export those images only, not all)::
 
-        $ showmount -e SERVERNAME
-        Export list for localhost:
-        /home/ttbd/images/tcf:live:0::x86_64 *
+     # tee /etc/exports.d/ttbd-pos.exports <<EOF
+     /home/ttbd/images/tcf:live:0::x86_64 *(ro,no_root_squash)
+     EOF
+     # systemctl reload nfs-server
+
+   Verify the directory is exported::
+
+     $ showmount -e SERVERNAME
+     Export list for localhost:
+     /home/ttbd/images/tcf:live:0::x86_64 *
 
 .. _ttbd_pos_deploying_images:
         
-Deploying other images
-~~~~~~~~~~~~~~~~~~~~~~
+POS:Deploying other images
+^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 Image naming follows the format::
 
@@ -1032,8 +1033,8 @@ consists of:
 
 .. _ttbd_pos_network_config:
 
-Configuring networks
-~~~~~~~~~~~~~~~~~~~~
+POS: Configuring networks
+^^^^^^^^^^^^^^^^^^^^^^^^^
 
 For a target to be able to be provisoned via POS, it needs to be
 connected to an (IPv4) network to the server, which provides DHCP,
@@ -1322,8 +1323,8 @@ Check it can power on and off::
   $ tcf power-on nwa
   $ tcf power-off nwa
 
-Configuring targets
-~~~~~~~~~~~~~~~~~~~
+POS: Configuring targets
+^^^^^^^^^^^^^^^^^^^^^^^^
 
 This example connects an Intel NUC5i5425OU called nuc-58 to the
 network *nwa* so it can be flashed with POS.
