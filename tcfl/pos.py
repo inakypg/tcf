@@ -723,7 +723,7 @@ def deploy_image(ic, target, image,
     :param list extra_deploy_fns: list of functions to call after the
       image has been deployed. e.g.:
 
-      >>> def pos_deploy_linux_kernel(ic, target, kws, kernel_file = None):
+      >>> def deploy_linux_kernel(ic, target, kws, kernel_file = None):
       >>>     ...
 
       the function will be passed keywords which contain values found
@@ -932,6 +932,10 @@ def deploy_image(ic, target, image,
             target.report_info("POS: configuring bootloader")
             boot_config(target, root_part_dev_base)
         target.shell.run("sync")
+        # Kill any processes left over here
+        target.shell.run("which lsof && kill -9 `lsof -Fp  /home | sed -n '/^p/{s/^p//;p}'`")
+        # leave /mnt
+        target.shell.run("cd /")
         target.shell.run("umount /mnt")
         # Now setup the local boot loader to boot off that
         target.property_set("pos_mode", "local")
@@ -1016,7 +1020,12 @@ def deploy_linux_kernel(ic, target, _kws):
     persistant space to the final destination (which is overriden by
     :func:`tcfl.pos.deploy`).
     """
-    target.report_info("deploying linux kernel", level = 0)
+    if not '' in _kws:
+        target.report_info("not deploying linux kernel because "
+                           "*pos_deploy_linux_kernel_tree* keyword "
+                           "has not been set for the target", dlevel = 2)
+        return
+    target.report_info("deploying linux kernel")
 
     # The target is running the Provisioning OS
     # Start rsync in the target to receive the stuff we want to send to it
