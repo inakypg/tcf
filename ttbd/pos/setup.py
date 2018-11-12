@@ -47,7 +47,7 @@ imaging on PC-class targets via DHCP / TFTP.
             'tcf-image-setup.sh',
         ]),
         ( '@prefix@/share/tcf/live', [
-            'tcf-live-boot_domain.pkgs'
+            'tcf-live-pos.pkgs'
         ]),
     ],
 )
