@@ -918,7 +918,7 @@ b. Extract the root file system from the ISO image to the
    will read-only root serve it from and also we'll be able to use
    it to flash targets::
 
-     $ /usr/share/tcf/tcf-image-setup.sh /home/ttbd/images/tcf:live:0::x86_64 tcf-live/tcf-live.iso
+     $ /usr/share/tcf/tcf-image-setup.sh /home/ttbd/images/tcf-live tcf-live/tcf-live.iso
      I: loop device /dev/loop0
      NAME      MAJ:MIN RM  SIZE RO TYPE MOUNTPOINT
      loop0       7:0    0  419M  0 loop
@@ -927,12 +927,12 @@ b. Extract the root file system from the ISO image to the
      I: mounted /dev/loop0p1 in tcf-image-setup.sh-XEqBHG/iso
      I: mounted tcf-image-setup.sh-XEqBHG/iso/LiveOS/squashfs.img in tcf-image-setup.sh-XEqBHG/squashfs
      I: mounted tcf-image-setup.sh-XEqBHG/squashfs/LiveOS/ext3fs.img in tcf-image-setup.sh-XEqBHG/root
-     I: created tcf:live:0::x86_64, transferring
-     I: tcf:live:0::x86_64: diffing verification
-     File tcf-image-setup.sh-XEqBHG/root/./dev/full is a character special file while file tcf:live:0::x86_64/.
+     I: created tcf-live, transferring
+     I: tcf-live: diffing verification
+     File tcf-image-setup.sh-XEqBHG/root/./dev/full is a character special file while file tcf-live/.
      /dev/full is a character special file
      ...
-     File tcf-image-setup.sh-XEqBHG/root/./dev/zero is a character special file while file tcf:live:0::x86_64/.
+     File tcf-image-setup.sh-XEqBHG/root/./dev/zero is a character special file while file tcf-live/.
      /dev/zero is a character special file
      I: unmounting tcf-image-setup.sh-XEqBHG/root
      I: unmounting tcf-image-setup.sh-XEqBHG/squashfs
@@ -947,14 +947,14 @@ c. Make the kernel and initrd for POS available via Apache for
 
    i. Copy the kernel::
 
-        # ln /home/ttbd/images/tcf:live:0::x86_64/boot/vmlinuz-* /home/ttbd/public_html/vmlinuz-tcf-live
+        # ln /home/ttbd/images/tcf-live/boot/vmlinuz-* /home/ttbd/public_html/vmlinuz-tcf-live
 
    ii. Regenerate the *initrd* with nfs-root support, as the initrd
        generated does not have nfs-root enabled (FIXME: figure out
        the configuration to enable it straight up)::
 
-         # dracut -v -k /home/ttbd/images/tcf:live:0::x86_64/lib/modules/* \
-               --kernel-image /home/ttbd/images/tcf:live:0::x86_64/boot/vmlinuz-* \
+         # dracut -v -k /home/ttbd/images/tcf-live/lib/modules/* \
+               --kernel-image /home/ttbd/images/tcf-live/boot/vmlinuz-* \
                -m "nfs base network kernel-modules" \
                /home/ttbd/public_html/initramfs-tcf-live
 
@@ -970,7 +970,7 @@ d. Make the POS root image available over NFS as read-only (note we
    only export those images only, not all)::
 
      # tee /etc/exports.d/ttbd-pos.exports <<EOF
-     /home/ttbd/images/tcf:live:0::x86_64 *(ro,no_root_squash)
+     /home/ttbd/images/tcf-live *(ro,no_root_squash)
      EOF
      # systemctl reload nfs-server
 
@@ -978,7 +978,7 @@ d. Make the POS root image available over NFS as read-only (note we
 
      $ showmount -e SERVERNAME
      Export list for localhost:
-     /home/ttbd/images/tcf:live:0::x86_64 *
+     /home/ttbd/images/tcf-live *
 
 .. _ttbd_pos_deploying_images:
         
@@ -1229,7 +1229,7 @@ g. Finally, we need to specify a few more tags that the clients and
               # Provisioning OS support to boot off PXE on nfs root
               pos_http_url_prefix = "http://192.168.97.1/ttbd-pos/",
               pos_nfs_server = "192.168.97.1",
-              pos_nfs_path = "/home/ttbd/images/tcf:live:0::x86_64",
+              pos_nfs_path = "/home/ttbd/images/tcf-live",
               pos_rsync_server = "192.168.97.1::images",
           ),
           ic_type = "ethernet"
@@ -1280,7 +1280,7 @@ All together, it shall look like:
            # Provisioning OS support to boot off PXE on nfs root
            pos_http_url_prefix = "http://192.168.97.1/ttbd-pos/",
            pos_nfs_server = "192.168.97.1",
-           pos_nfs_path = "/home/ttbd/images/tcf:live:0::x86_64",
+           pos_nfs_path = "/home/ttbd/images/tcf-live",
            pos_rsync_server = "192.168.97.1::images",
        ),
        ic_type = "ethernet"
@@ -1308,7 +1308,7 @@ Now the configuration is loaded and you can run::
     ipv6_addr: fc00::61:1
     ipv6_prefix_len: 112
     pos_http_url_prefix: http://192.168.97.1/ttbd-pos/
-    pos_nfs_path: /home/ttbd/images/tcf:live:0::x86_64
+    pos_nfs_path: /home/ttbd/images/tcf-live
     pos_nfs_server: 192.168.97.1
     pos_rsync_server: 192.168.97.1::images
     powered: False
