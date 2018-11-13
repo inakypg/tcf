@@ -217,3 +217,27 @@ case $image_type in
         info $image_type: added ttyUSB0 to automatic console spawn
         ;;
 esac
+
+case $image_type in
+    fedora*)
+        # Disable SELinux -- can't figure out how to allow it to work
+        # properly in allowing ttyUSB0 access to agetty so we can have
+        # a serial console.
+        sudo sed -i 's/SELINUX=enforcing/SELINUX=disabled/' /etc/selinux/config
+        ;;
+    *)
+        ;;
+esac
+
+case $image_type in
+    fedoralive)
+        # Remove the GDM initial config user, so we don't get stuck
+        # trying to configure the system
+        sudo tee $destdir/etc/gdm/custom.conf <<EOF
+[daemon]
+InitialSetupEnable=false
+EOF
+        ;;
+    *)
+        ;;
+esac
