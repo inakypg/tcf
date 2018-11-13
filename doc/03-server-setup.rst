@@ -827,7 +827,7 @@ been tested yet, shall be similar.
 
 2. Ensure your user is member of the ``ttbd`` group::
 
-     # usermod -gA ttbd YOURUSER
+     # usermod -aG ttbd YOURUSER
 
    you will have to re-login for changes to take effect.
 
