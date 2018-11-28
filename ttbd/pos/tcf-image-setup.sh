@@ -112,6 +112,7 @@ case "$image_type" in
         root_part=p1
         ;;
     rootfswic)
+        boot_part=p1
         root_part=p2
         ;;
 
