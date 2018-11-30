@@ -546,6 +546,13 @@ def image_select_best(image, available_images, arch_default):
     else:
         spin_images = filter(lambda x: x[1] == spin, distro_images)
 
+    if not spin_images:
+        raise tcfl.tc.blocked_e(
+            "can't find match for image %s on available images" % image,
+            dict(images_available =
+                 "\n".join([ ":".join(i) for i in available_images ])
+            ))
+
     # now filter based on version -- rules change here -- if there is
     # no version specified, pick what seems to be the most recent
     # (highest)
