@@ -97,7 +97,9 @@ mkpart primary ext4 %(swap_end)s %(scratch_end)s \
     boot_dev = device + target.kws['p_prefix'] + "1"
     swap_dev = device + target.kws['p_prefix'] + "2"
     home_dev = device + target.kws['p_prefix'] + "3"
-    target.shell.run("mkfs.vfat -F32 -n TCF-BOOT " + boot_dev)
+    # Note: use FAT vs VFAT: vfat name translation creates issues when
+    # doing long file names; fat32 does not have that problem.
+    target.shell.run("mkfs.fat -F32 -n TCF-BOOT " + boot_dev)
     target.shell.run("mkswap -L tcf-swap " + swap_dev)
     target.shell.run("mkfs.ext4 -FqL tcf-scratch " + home_dev)
 
