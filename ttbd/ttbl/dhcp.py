@@ -162,8 +162,14 @@ host %s {
         hardware ethernet %s;
         fixed-address %s;
         option host-name "%s";
+        # note how we are forcing NFSv3, as it might default to v2
+        # FIXME: parameter?
+        # Also UDP, more resilient for our use and soft so we can
+        # recover in some cases more easily
+        option root-path "%s:%s,udp,soft,nfsvers=3";
 }
-""" % (target_id, mac_addr, ipv4_addr, target_id))
+""" % (target_id, mac_addr, ipv4_addr, target_id,
+       self._params['pos_nfs_server'], self._params['pos_nfs_path']))
 
 
     def _dhcp_conf_write_ipv6(self, f):
@@ -217,8 +223,15 @@ host %s {
         hardware ethernet %s;
         fixed-address6 %s;
         option host-name "%s";
+        option root-path "";
+        # note how we are forcing NFSv3, as it might default to v2
+        # FIXME: parameter?
+        # Also UDP, more resilient for our use and soft so we can
+        # recover in some cases more easily
+        option root-path "%s:%s,udp,soft,nfsvers=3";
 }
-""" % (target_id, mac_addr, ipv6_addr, target_id))
+""" % (target_id, mac_addr, ipv6_addr, target_id,
+       self._params['pos_nfs_server'], self._params['pos_nfs_path']))
 
     def _dhcp_conf_write(self):
         # Write DHCPD configuration
@@ -260,7 +273,7 @@ host %s {
                              close_fds = True,
                              stdout = so, stderr = subprocess.STDOUT)
         except OSError as e:
-            raise self.dhcpd_start_e("DHCPD failed to start: %s", e)
+            raise self.start_e("DHCPD failed to start: %s", e)
         pid = commonl.process_started(
             self.dhcpd_pidfile, self.dhcpd_path,
             verification_f = os.path.exists,
@@ -273,7 +286,7 @@ host %s {
         #
         # Can be ignored
         if pid == None:
-            raise self.dhcpd_start_e("dhcpd failed to start")
+            raise self.start_e("dhcpd failed to start")
         ttbl.daemon_pid_add(pid)	# FIXME: race condition if it died?
 
 
@@ -287,6 +300,11 @@ host %s {
             self.pxe_dir = os.path.join(tftp_dir, tftp_prefix)
             self.dhcpd_pidfile = os.path.join(self.state_dir, "dhcpd.pid")
 
+            # These are self._params we might not know at the
+            # beginning (when the object was created) as tags with
+            # information we need might have been created later
+            self._params['pos_nfs_server'] = target.tags['pos_nfs_server']
+            self._params['pos_nfs_path'] = target.tags['pos_nfs_path']
 
     def power_on_do(self, target):
         """
