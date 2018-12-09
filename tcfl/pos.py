@@ -689,7 +689,8 @@ def deploy_image(ic, target, image,
                  boot_dev = None, root_part_dev = None,
                  partitioning_fn = partition,
                  extra_deploy_fns = None,
-                 mkfs_cmd = "mkfs.ext4 -j %(root_part_dev)s",
+                 # mkfs has to have -F to avoid it asking questions
+                 mkfs_cmd = "mkfs.ext4 -Fj %(root_part_dev)s",
                  pos_prompt = None):
 
     """Deploy an image to a target using the Provisioning OS
