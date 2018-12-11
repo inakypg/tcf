@@ -436,10 +436,9 @@ def power_on_pre_pos_setup(target):
         kws['pos_image'] = 'tcf-live'
         kws['root_dev'] = '/dev/nfs'
         # no 'single' so it force starts getty on different ports
-        # nfsroot: note we use UDP, so it is more resilient to issues
+        # nfsroot: note we defer to whatever we are given over DHCP
         kws['extra_kopts'] += \
             "initrd=%(pos_http_url_prefix)sinitramfs-%(pos_image)s " \
-            "nfsroot=%(pos_nfs_server)s:%(pos_nfs_path)s,udp,soft " \
             "rd.live.image selinux=0 audit=0 ro " \
             "rd.luks=0 rd.lvm=0 rd.md=0 rd.dm=0 rd.multipath=0 " \
             "plymouth.enable=0 "
@@ -472,7 +471,8 @@ def power_on_pre_pos_setup(target):
         # and can syslog/nfsmount, etc Note we know the fields from the
         # target's configuration, as they are pre-assigned
         #
-        # <client-ip>:<server-ip>:<gw-ip>:<netmask>:<hostname>:<device>:<autoconf>:<dns0-ip>:<dns1-ip>:<ntp0-ip>
+        # ip=DHCP so we get always the same IP address and NFS root
+        # info (in option root-path when writing the DHCP config file)
         config = """\
 say TCF Network boot to Service OS
 #serial 0 115200
@@ -482,7 +482,7 @@ label boot
   # boot to %(pos_image)s
   linux %(pos_http_url_prefix)svmlinuz-%(pos_image)s
   append console=tty0 console=%(linux_serial_console_default)s,115200 \
-    ip=%(ipv4_addr)s::%(ipv4_gateway)s:%(ipv4_netmask)s:%(name)s::off:%(ipv4_gateway)s \
+    ip=dhcp \
     root=%(root_dev)s %(extra_kopts)s
 """
         # if there are substitution fields in the config text,
