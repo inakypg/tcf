@@ -953,11 +953,15 @@ c. Make the kernel and initrd for POS available via Apache for
        generated does not have nfs-root enabled (FIXME: figure out
        the configuration to enable it straight up)::
 
-         # dracut -v -k /home/ttbd/images/tcf-live/lib/modules/* \
+         # dracut -v --kver $(ls /home/ttbd/images/tcf-live/lib/modules) \
+                -k /home/ttbd/images/tcf-live/lib/modules/* \
                --kernel-image /home/ttbd/images/tcf-live/boot/vmlinuz-* \
                -m "nfs base network kernel-modules" \
                /home/ttbd/public_html/initramfs-tcf-live
 
+       .. warning:: ``--kver`` is needed to not default to the kernel
+                    version of the system running the command.
+               
    iii. Make everything readable to the public::
 
           # chmod 0644 /home/ttbd/public_html/*
@@ -1441,20 +1445,10 @@ network *nwa* so it can be flashed with POS.
                   'x86_64': {
                       'linux': True,
                       'console': 'x86_64',
-                  }
+                  },
               },
-              'pos_capable': True,
-              'pos_boot_interconnect': "nwa",
-              'pos_boot_dev': "sda",
-              'pos_partsizes': "1:15:30:10",
-              'linux_serial_console_default': 'ttyUSB0'
           },
           target_type = "Intel NUC5i5425OU")
-      
-      # activate the POS driver for this target
-      # FIXME: this needs to be hidden
-      ttbl.config.targets["nuc-58a"].power_on_pre_fns.append(
-          ttbl.dhcp.power_on_pre_pos_setup)
 
       # plug the target to the interconnect and assign IP addresses
       # that DHCP will always assign
@@ -1465,7 +1459,20 @@ network *nwa* so it can be flashed with POS.
               ipv6_addr = 'fc00::61:9e', ipv6_prefix_len = 112
           )
       )
+
+      # Configure POS support in the tags
+      ttbl.config.targets["nuc-58a"].tags_update(dict(
+          pos_capable = True,
+          pos_boot_interconnect = "nwa",
+          pos_boot_dev = "sda",
+          pos_partsizes = "1:15:30:10",
+          linux_serial_console_default = 'ttyUSB0'
+      ))
       
+      # activate the POS driver for this target
+      # FIXME: this needs to be hidden
+      ttbl.config.targets["nuc-58a"].power_on_pre_fns.append(
+          ttbl.dhcp.power_on_pre_pos_setup)
    
 Restart the server and verify *nuc-58a* works as expected::
 
