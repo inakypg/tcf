@@ -564,6 +564,8 @@ def image_select_best(image, available_images, arch_default):
             for i in spin_images
         ])
         version = versions[-1]
+    else:
+        version = distutils.version.LooseVersion(version)
     version_images = filter(
         lambda x: (
             distutils.version.LooseVersion(x[2] if x[2] != "" else '0')
@@ -590,6 +592,8 @@ def image_select_best(image, available_images, arch_default):
             for i in version_images
         ])
         subversion = subversions[-1]
+    else:
+        subversion = distutils.version.LooseVersion(subversion)
     subversion_images = filter(
         lambda x: (
             distutils.version.LooseVersion(x[3] if x[3] != "" else '0')
