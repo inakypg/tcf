@@ -30,24 +30,24 @@ class _test(tcfl.tc.tc_c):
         ic.report_pass("powered on")
 
     @tcfl.tc.concurrently()
-    def deploy_10_target(self, target):
-        tcfl.pos.deploy_image(self.ic, target, image)
+    def deploy_10_target(self, ic, target):
+        tcfl.pos.deploy_image(ic, target, image)
         target.report_pass("DEPLOYED")
         target.power.cycle()
         target.shell.linux_shell_prompt_regex = re.compile('root@.*# ')
         target.shell.up(user = 'root')
 
     @tcfl.tc.concurrently()
-    def deploy_10_target1(self, target1):
-        tcfl.pos.deploy_image(self.ic, target1, image)
+    def deploy_10_target1(self, ic, target1):
+        tcfl.pos.deploy_image(ic, target1, image)
         target1.report_pass("DEPLOYED")
         target1.power.cycle()
         target1.shell.linux_shell_prompt_regex = re.compile('root@.*# ')
         target1.shell.up(user = 'root')
 
     @tcfl.tc.concurrently()
-    def deploy_10_target2(self, target2):
-        tcfl.pos.deploy_image(self.ic, target2, image)
+    def deploy_10_target2(self, ic, target2):
+        tcfl.pos.deploy_image(ic, target2, image)
         target2.report_pass("DEPLOYED")
         target2.power.cycle()
         target2.shell.linux_shell_prompt_regex = re.compile('root@.*# ')
