@@ -347,13 +347,12 @@ def boot_config(target, root_part_dev,
         # FIXME: can this come from config?
         # We harcode a serial console on the device where we know the
         # framework is listening
-        linux_options_append = [
+        linux_options_append = \
             "console=%(linux_serial_console_default)s,115200n8" % kws
-        ]
-        linux_options_append += target.rt.get('linux_options_append', "")
 
-        for option in linux_options_append:
-            linux_options += " " + option
+        linux_options_append += " " + target.rt.get('linux_options_append', "")
+
+        linux_options += " " + linux_options_append
 
         for option, value in linux_options_replace.iteritems():
             regex = re.compile(r"\b" + option + r"=\S+")
