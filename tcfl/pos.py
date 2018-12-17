@@ -6,7 +6,40 @@
 #
 
 """
-Utilities for flashing PC-Class devices with a Linux based Provisioning OS
+This module provides tools to image devices with a Provisioning OS.
+
+The general operation mode for this is instructing the device to boot
+the :term:`Provisioning OS <POS>`; at this point, the test script (or
+via the *tcf* client line) can interact with the POS over the serial
+console.
+
+Then the device can be partitioned, formatted, etc with general Linux
+command line. As well, we can provide an :mod:`rsync server
+<ttbl.rsync>` to provide OS images that can be flashed
+
+Booting to POS can be accomplished:
+
+- by network boot and root over NFS
+- by a special boot device pre-configured to always boot POS
+- any other
+
+Server side modules used actively by this system:
+
+- DHCP server :mod:`ttbl.dhcp`: provides dynamic IP address
+  assignment; it can be configured so a pre-configured IP address is
+  always assigned to a target and will provide also PXE/TFTP boot
+  services to boot into POS mode (working in conjunction with a HTTP,
+  TFTP and NFS servers).
+
+- rsync server :mod:`ttbl.rsync`: provides access to images to rsync
+  into partitions (which is way faster than some other imaging methods
+  when done over a 1Gbps link).
+
+- port redirector :mod:`ttbl.socat`: not strictly needed for POS, but
+  useful to redirect ports out of the :term:`NUT` to the greater
+  Internet. This comes handy if as part of the testing external
+  software has to be installed or external services acccessed.
+
 """
 
 import operator
@@ -732,7 +765,7 @@ def deploy_image(ic, target, image,
       the one that has the most similar to what we are installing to
       minimize the install time.
 
-    :param list extra_deploy_fns: list of functions to call after the
+    :param extra_deploy_fns: list of functions to call after the
       image has been deployed. e.g.:
 
       >>> def deploy_linux_kernel(ic, target, kws, kernel_file = None):
@@ -748,8 +781,9 @@ def deploy_image(ic, target, image,
      - fix to autologing serial console?
      - do a couple retries if fails?
      - increase in property bd.stats.client.sos_boot_failures and
-       bd.stats.client.sos_boot_count (to get a baseline_
+       bd.stats.client.sos_boot_count (to get a baseline)
      - tag bd.stats.last_reset to DATE
+
     Note: you might want the interconnect power cycled
 
     """
@@ -995,11 +1029,11 @@ def deploy_linux_kernel(ic, target, _kws):
     """Deploy a linux kernel tree in the local machine to the target's
     root filesystem
 
-    This is normally given to :func:`tcfl.pos.deploy` as:
+    This is normally given to :func:`tcfl.pos.deploy_image` as:
 
     >>> target.kw_set("pos_deploy_linux_kernel", SOMELOCALLOCATION)
-    >>> tcfl.pos.deploy(ic, target, IMAGENAME,
-    >>>                 extra_deploy_fns = [ tcfl.pos.deploy_linux_kernel ])
+    >>> tcfl.pos.deploy_image(ic, target, IMAGENAME,
+    >>>                       extra_deploy_fns = [ tcfl.pos.deploy_linux_kernel ])
 
     as it expects ``kws['pos_deploy_linux_kernel']`` which points to a
     local directory in the form::
@@ -1016,13 +1050,14 @@ def deploy_linux_kernel(ic, target, _kws):
     **Low level details**
 
     When the target's image has been flashed in place,
-    :func:`tcfl.pos.deploy` is asked to call this function.
+    :func:`tcfl.pos.deploy_image` is asked to call this function.
 
     The client will rsync the tree from the local machine to the
     persistent space in the target's selected root partition (which is
-    not overriden by :func:`tcfl.pos.deploy`). For that it needs to
-    establish a TCPv4 tunnel to the target; the target is then made to
-    serve rsync over that tunnel for the client to transfer the tree.
+    not overriden by :func:`tcfl.pos.deploy_image`). For that it needs
+    to establish a TCPv4 tunnel to the target; the target is then made
+    to serve rsync over that tunnel for the client to transfer the
+    tree.
 
     The tree is first transferred to the persistent space so if there
     are multiple flashings done for the same versions, then the
@@ -1030,7 +1065,8 @@ def deploy_linux_kernel(ic, target, _kws):
 
     After there, the client will have the target rsync from the
     persistant space to the final destination (which is overriden by
-    :func:`tcfl.pos.deploy`).
+    :func:`tcfl.pos.deploy_image`).
+
     """
     if not '' in _kws:
         target.report_info("not deploying linux kernel because "

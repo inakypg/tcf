@@ -12,6 +12,11 @@ Test library (utilities for testcases)
 
 .. automodule:: tcfl.tl
 
+Provisioning/deploying/flashing PC-class devices with a Provisioning OS
+-----------------------------------------------------------------------
+
+.. automodule:: tcfl.pos
+
 Extensions to :class:`tcfl.tc.target_c` types
 ---------------------------------------------
 
