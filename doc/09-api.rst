@@ -309,8 +309,11 @@ Miscelaneous and other interfaces
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 .. automodule:: ttbl.buttons
+.. automodule:: ttbl.dhcp
 .. automodule:: ttbl.fastboot
 .. automodule:: ttbl.ioc_flash_server_app
+.. automodule:: ttbl.rsync
+.. automodule:: ttbl.socat
 .. automodule:: ttbl.target
 
 Common helper library
