@@ -781,6 +781,10 @@ Once a target is configured in, run a quick healthcheck::
 Configuring Provisioning OS support
 -----------------------------------
 
+POS allows for a method to provision/flash/image certain devices using
+a :mod:`Provisioning OS <tcfl.pos>` which is faster than imaging using
+standard OS installation procedures. 
+
 POS needs, depending on the setup:
 
 - targets able to UEFI boot via PXE to the network

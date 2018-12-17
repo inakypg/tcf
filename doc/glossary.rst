@@ -35,8 +35,8 @@ Glossary
      
    POS
 
-     Provisioning OS; operating system that is used to provision
-     devices.
+     Provisioning OS; operating system running on the :term:`test
+     target` that is used to provision the target's drive.
      
    test case
 

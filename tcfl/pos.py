@@ -40,6 +40,9 @@ Server side modules used actively by this system:
   Internet. This comes handy if as part of the testing external
   software has to be installed or external services acccessed.
 
+Note installation in the server side is needed, as described in
+:ref:`POS setup <pos_setup>` (FIXME: this link is not taking to the
+right spot).
 """
 
 import operator
