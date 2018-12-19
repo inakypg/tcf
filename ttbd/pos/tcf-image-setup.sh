@@ -214,6 +214,7 @@ if [ $image_type = debian ]; then
     squashfs_file=$(find $tmpdir/iso -iname filesystem.squashfs)
     sudo mount -o loop $squashfs_file $tmpdir/root
     info mounted $squashfs_file in $tmpdir/root
+    mounted_dirs="$tmpdir/root ${mounted_dirs:-}"
 
 elif [ $image_type = android ]; then
 
@@ -256,6 +257,15 @@ else
     info mounted ${loop_dev}${root_part} in $tmpdir/root
     mounted_dirs="$tmpdir/root ${mounted_dirs:-}"
 
+fi
+
+# Need to copy the boot kernel to root/boot before we mount boot ontop
+# of root/boot
+if [ $image_type = debian ]; then
+    dir=$(dirname $squashfs_file)
+    kversion=$(file $dir/vmlinuz | sed  -e 's/^.* version //' -e 's/ .*//')
+    cp $dir/initrd $destdir/boot/initramfs-$kversion
+    cp $dir/vmlinuz $destdir/boot/vmlinuz-$kversion
 fi
 
 if ! [ -z "$boot_part" ]; then
@@ -316,14 +326,6 @@ else
 
 fi
 
-if [ $image_type = debian ]; then
-
-    dir=$(dirname $squashfs_file)
-    kversion=$(file $dir/vmlinuz | sed  -e 's/^.* version //' -e 's/ .*//')
-    cp $dir/initrd $destdir/initramfs-$version
-    cp $dir/vmlinuz $destdir/vmlinuz-$version
-fi
-
 # Remove the root password and unset the counters so you are not
 # forced to change it -- we want passwordless login on the serial
 # console or anywhere we access the test system.
@@ -338,7 +340,7 @@ for shadow_file in \
 done
 
 case $image_type in
-    fedora*|clear)
+    fedora*|debian*|ubuntu*|clear)
         # Harcode enable getty on ttyUSB0 (FIXME: maybe do in the
         # setup script?) -- it doesn't autostart it from /proc/cmdline
         # because by the time we boot, ttyUSB0 hasb't been detected
@@ -346,7 +348,7 @@ case $image_type in
         # ALSO, force 115200 is the only BPS we support
         sudo sed -i \
              's|^ExecStart=-/sbin/agetty -o.*|ExecStart=-/sbin/agetty 115200 %I $TERM|' \
-             $destdir/usr/lib/systemd/system/serial-getty@.service
+             $destdir/lib/systemd/system/serial-getty@.service
         info $image_type: force settings of ttyUSB0 console
         sudo chroot $destdir systemctl enable serial-getty@ttyUSB0
         info $image_type: force enabling ttyUSB0 console
@@ -364,7 +366,7 @@ case $image_type in
         info $image_type: added ttyUSB0 to automatic console spawn
         ;;
 esac
-
+    
 case $image_type in
     fedora*)
         # Disable SELinux -- can't figure out how to allow it to work
