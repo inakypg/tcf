@@ -957,14 +957,16 @@ c. Make the kernel and initrd for POS available via Apache for
        generated does not have nfs-root enabled (FIXME: figure out
        the configuration to enable it straight up)::
 
-         # dracut -v --kver $(ls /home/ttbd/images/tcf-live/lib/modules) \
+         # dracut -v -H --kver $(ls /home/ttbd/images/tcf-live/lib/modules) \
                 -k /home/ttbd/images/tcf-live/lib/modules/* \
                --kernel-image /home/ttbd/images/tcf-live/boot/vmlinuz-* \
-               -m "nfs base network kernel-modules" \
+               -m "nfs base network kernel-modules kernel-network-modules" \
                /home/ttbd/public_html/initramfs-tcf-live
 
        .. warning:: ``--kver`` is needed to not default to the kernel
                     version of the system running the command.
+                    ``-H`` is needed to ensure a generic initrd that
+                    works with multiple machines is created.
                
    iii. Make everything readable to the public::
 
