@@ -202,7 +202,8 @@ def _linux_boot_guess_from_boot(target, image):
     Given a list of files (normally) in /boot, decide which ones are
     Linux kernels and initramfs; select the latest version
     """
-    os_release = tcfl.tl.linux_os_release_get(target)
+    # guess on the mounted filesystem, otherwise we get the POS!
+    os_release = tcfl.tl.linux_os_release_get(target, prefix = "/mnt")
     distro = os_release.get('ID', None)
 
     output = target.shell.run("ls -1 /mnt/boot", output = True)
@@ -230,11 +231,12 @@ def _linux_boot_guess_from_boot(target, image):
         kver = kernel_versions.keys()[0]
         options = ""
         # image is atuple of (DISTRO, SPIN, VERSION, SUBVERSION, ARCH)
-        if distro == "fedora" and 'live' in image:
-            # Fedora Live needs this to boot, unknown why
-            target.report_info("Fedora Live hack: adding 'rw' to cmdline",
+        if distro in ("fedora", "debian", "ubuntu") and 'live' in image:
+            # Live distros needs this to boot, unknown exactly why;
+            # also add console=tty0 to ensure it is not lost
+            target.report_info("Linux Live hack: adding 'rw' to cmdline",
                                dlevel = 2)
-            options = "rw"
+            options = "console=tty0 rw"
         return kernel_versions[kver], \
             initramfs_versions.get(kver, None), \
             options

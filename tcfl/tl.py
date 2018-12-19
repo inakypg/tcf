@@ -206,13 +206,13 @@ def tcpdump_collect(ic, filename = None):
     ic.broker_files.dnload(ic.kws['tc_hash'] + ".cap", filename)
     ic.report_info("tcpdump available in file %s" % filename)
 
-def linux_os_release_get(target):
+def linux_os_release_get(target, prefix = ""):
     """
     Return in a dictionary the contents of a file /etc/os-release (if
     it exists)
     """
     output = target.shell.run(
-        "cat /etc/os-release || true", output = True)
+        "cat %s/etc/os-release || true" % prefix, output = True)
     matches = re.findall(r"^(?P<field>\S+)=(?P<valur>\S+)$", output,
                          re.MULTILINE)
     os_release = {}
