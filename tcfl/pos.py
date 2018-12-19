@@ -139,7 +139,7 @@ mkpart primary ext4 %(swap_end)s %(scratch_end)s \
     target.shell.run("mkswap -L tcf-swap " + swap_dev)
     target.shell.run("mkfs.ext4 -FqL tcf-scratch " + home_dev)
 
-def _linux_boot_guess_from_lecs(target):
+def _linux_boot_guess_from_lecs(target, _image):
     """
     Setup a Linux kernel to boot using Gumniboot
     """
@@ -197,11 +197,14 @@ def _linux_boot_guess_from_lecs(target):
 
     return kernel, initrd, options
 
-def _linux_boot_guess_from_boot(target):
+def _linux_boot_guess_from_boot(target, image):
     """
     Given a list of files (normally) in /boot, decide which ones are
     Linux kernels and initramfs; select the latest version
     """
+    os_release = tcfl.tl.linux_os_release_get(target)
+    distro = os_release.get('ID', None)
+
     output = target.shell.run("ls -1 /mnt/boot", output = True)
     kernel_regex = re.compile("(initramfs|initrd|bzImage|vmlinuz)(-(.*))?")
     kernel_versions = {}
@@ -225,9 +228,16 @@ def _linux_boot_guess_from_boot(target):
 
     if len(kernel_versions) == 1:
         kver = kernel_versions.keys()[0]
+        options = ""
+        # image is atuple of (DISTRO, SPIN, VERSION, SUBVERSION, ARCH)
+        if distro == "fedora" and 'live' in image:
+            # Fedora Live needs this to boot, unknown why
+            target.report_info("Fedora Live hack: adding 'rw' to cmdline",
+                               dlevel = 2)
+            options = "rw"
         return kernel_versions[kver], \
             initramfs_versions.get(kver, None), \
-            ""
+            options
     elif len(kernel_versions) > 1:
         raise tcfl.tc.blocked_e(
             "more than one Linux kernel in /boot; I don't know "
@@ -236,14 +246,14 @@ def _linux_boot_guess_from_boot(target):
     else:
         return None, None, ""
 
-def _linux_boot_guess(target):
+def _linux_boot_guess(target, image):
     """
     Setup a Linux kernel to boot using Gumniboot
     """
-    kernel, initrd, options = _linux_boot_guess_from_lecs(target)
+    kernel, initrd, options = _linux_boot_guess_from_lecs(target, image)
     if kernel:
         return kernel, initrd, options
-    kernel, initrd, options = _linux_boot_guess_from_boot(target)
+    kernel, initrd, options = _linux_boot_guess_from_boot(target, image)
     if kernel:
         target.report_info("POS: guessed kernel from /boot directory: "
                            "kernel %s initrd %s options %s"
@@ -313,7 +323,7 @@ def _efibootmgr_setup(target):
     target.shell.run("efibootmgr -n " + lbm)
 
 
-def boot_config(target, root_part_dev,
+def boot_config(target, root_part_dev, image,
                 linux_kernel_file = None,
                 linux_initrd_file = None,
                 linux_options = None):
@@ -324,7 +334,7 @@ def boot_config(target, root_part_dev,
     # If we didn't specify a Linux kernel, try to guess
     if linux_kernel_file == None:
         linux_kernel_file, _linux_initrd_file, _linux_options = \
-            _linux_boot_guess(target)
+            _linux_boot_guess(target, image)
     if linux_initrd_file == None:
         linux_initrd_file = _linux_initrd_file
     if linux_options == None:
@@ -979,7 +989,7 @@ def deploy_image(ic, target, image,
             # FIXME: we are EFI only for now, way easier
             # Make sure we have all the entries for systemd-loader
             target.report_info("POS: configuring bootloader")
-            boot_config(target, root_part_dev_base)
+            boot_config(target, root_part_dev_base, image_final)
         target.shell.run("sync")
         # Kill any processes left over here
         target.shell.run("which lsof && kill -9 `lsof -Fp  /home | sed -n '/^p/{s/^p//;p}'`")
