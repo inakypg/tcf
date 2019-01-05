@@ -115,7 +115,7 @@ option architecture-type code 93 = unsigned integer 16;
 
 """)
         # FIXME: make it so using pxelinux is a configuratio template
-        # (likewise on the tftp side, so we can swithc to EFI boot or
+        # (likewise on the tftp side, so we can switch to EFI boot or
         # whatever we want)
         f.write("""\
 subnet %(if_net)s netmask %(if_netmask)s {
@@ -420,7 +420,6 @@ def power_on_pre_pos_setup(target):
                 interconnect['ipv4_prefix_len']),
             mac_addr = mac_addr,
             name = target.id,
-            # FIXME: rename to pos_tftp_url_prefix
             pos_http_url_prefix = boot_ic_tags['pos_http_url_prefix'],
             pos_nfs_server = boot_ic_tags['pos_nfs_server'],
             pos_nfs_path = boot_ic_tags['pos_nfs_path'],
@@ -442,22 +441,6 @@ def power_on_pre_pos_setup(target):
             "rd.live.image selinux=0 audit=0 ro " \
             "rd.luks=0 rd.lvm=0 rd.md=0 rd.dm=0 rd.multipath=0 " \
             "plymouth.enable=0 "
-
-        # Clearlinux
-        # Can't get to boot ok
-        if False:
-            # - installed based on instructions /home/images/howto.rst
-            kws['pos_image'] = 'clear-24710-installer'
-            # removed selinux=0 and single
-            kws['extra_kopts'] = \
-                "initrd=%(http_url_prefix)sinitramfs-%(pos_image)s " \
-                "root=nfs:%(nfs_server)s:%(nfs_path)s,soft " \
-                "audit=0 modprobe.blacklist=ccipciedrv,aalbus,aalrms,aalrmc" \
-                "init=/usr/lib/systemd/systemd-bootchart initcall_debug" \
-                "tsc=reliable no_timer_check noreplace-smp" \
-                "kvm-intel.nested=1 intel_iommu=igfx_off cryptomgr.notests" \
-                "rcupdate.rcu_expedited=1 i915.fastboot=1 rcu_nocbs=0-64" \
-                "ro rootwait"
 
         # Generate the PXE linux configuration
         #
