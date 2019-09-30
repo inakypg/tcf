@@ -528,10 +528,8 @@ class interface(ttbl.tt_interface):
 
     def put_cycle(self, target, who, args, _user_path):
         impls, _all = self.args_impls_get(args)
-        if 'wait' in args:
-            wait = float(args['wait'])
-        else:
-            wait = None
+        wait = float(args.get('wait',
+                              target.tags.get('power_cycle_wait', None)))
         with target.target_owned_and_locked(who):
             target.timestamp()
             self._off(target, impls, " (because power-cycle)", _all)
