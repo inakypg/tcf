@@ -1571,7 +1571,8 @@ class target_c(object):
         assert component == None or isinstance(component, basestring)
         assert isinstance(stream, bool)
         assert isinstance(raw, bool)
-        assert method.upper() in ( "PUT", "GET", "DELETE", "POST" )
+        assert method.upper() in ( "PUT", "GET", "DELETE", "POST" ), \
+            "method must be PUT|GET|DELETE|POST; got %s" % method
 
         if component:
             kwargs['component'] = component
@@ -7126,3 +7127,5 @@ import target_ext_fastboot
 target_c.extension_register(target_ext_fastboot.extension, "fastboot")
 import pos
 target_c.extension_register(pos.extension, "pos")
+import target_ext_things
+target_c.extension_register(target_ext_things.extension, "things")
