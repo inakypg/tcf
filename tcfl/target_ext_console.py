@@ -29,8 +29,7 @@ import tc
 from . import msgid_c
 
 class extension(tc.target_extension_c):
-    """
-    Extension to :py:class:`tcfl.tc.target_c` to run methods from the console
+    """Extension to :py:class:`tcfl.tc.target_c` to run methods from the console
     management interface to TTBD targets.
 
     Use as:
@@ -41,20 +40,40 @@ class extension(tc.target_extension_c):
     >>> target.console.list()
 
     Consoles might be disabled (because for example, the targer has to
-    be on some network for them to be enabled:
+    be on some network for them to be enabled; you can get console
+    specific parameters with:
+
+    >>> params = target.console.setup_get()
+
+    You can set them up (and these are implementation specific:)
+
+    >>> target.console.setup(CONSOLENAME, param1 = val1, param2 = val2...)
+
+    Once setup and ready to enable/disable::
 
     >>> target.console.enable()
     >>> target.console.disable()
 
-    You can setup some parameters with:
+    You can set the default console with:
 
-    >>> target.console.setup()
-    >>> target.console.setup_get()
+    >>> target.console.default = NAME
 
+    A common pattern is for a system to boot up using a serial console
+    and once it is up, SSH is started and the default console is
+    switched to an SSH based console, faster and more reliable.
+
+    The targets are supposed to declare the following consoles:
+
+    - *default*: the one we use by default
+    - *preferred* (optional): the one to switch for once done booting,
+      but might console-specific need setup (like SSH server starting,
+      etc)
+
+    When the console is set to another default, the property
+    *console-default* will reflect that. It will be reset upon power-on.
     """
 
     def __init__(self, target):
-        self._default = None
         interfaces = target.rt.get('interfaces', [])
         if 'console' in target.rt.get('interfaces', []):
             self.compat = False
@@ -65,6 +84,12 @@ class extension(tc.target_extension_c):
         self.target = target
         # this won't change runtime, so it is ok to cache it
         self.console_list = self.list()
+        # Which is the default console that was set in runtime?
+        # call it only once from here, otherwise everytime we try to
+        # get the console to use by default we do a call
+        self.default_property = self.target.property_get("console-default",
+                                                         None)
+        self._default = self.default_property
 
     def _console_get(self, console):
         #
@@ -79,6 +104,8 @@ class extension(tc.target_extension_c):
             return console
         if self._default:
             return self._default
+        if self.default_property:
+            return self.default_property
         if 'default' in self.console_list:
             return 'default'
         elif self.console_list:
@@ -108,10 +135,72 @@ class extension(tc.target_extension_c):
         assert new_console == None or new_console in console_list, \
             "new default console %s is not an existing console (%s)" \
             % (new_console, " ".join(console_list))
-        self.target.report_info("default console changed from %s to %s"
-                                % (self._default, new_console))
-        self._default = new_console
+        if self._default != new_console:
+            self.target.report_info("default console changed from %s to %s"
+                                    % (self._default, new_console))
+            self._default = new_console
+            self.target.property_set("console-default", new_console)
         return new_console
+
+    def select_preferred(self, console = None, shell_setup = True,
+                         **console_setup_kwargs):
+        """
+        Setup, enable and switch as default to the preferred console
+
+        If the target declares a preferred console, then switching to
+        it after setting up whatever is needed (eg: SSH daemons in the
+        target, etc, paramters in the console) usually yields a faster
+        and more reliable console.
+
+        If there is no *preferred* console, then this doesn't change
+        anything.
+
+        :param str console: (optional) console name to make preferred;
+          default to whatever the target declares (by maybe exporting a
+          console called *preferred*).
+
+        :param shell_setup: (optional, default) setup the shell
+          up by disabling command line editing (makes it easier for
+          the automation) and set up hooks that will raise an
+          exception if a shell command fails.
+
+          By default calls target.shell.setup(); if *False*, nothing
+          will be called. No arguments are passed, the function needs
+          to operate on the default console.
+
+        The rest of the arguments are passed verbatim to
+        :func:`target.console.setup
+        <tcfl.target_ext_console.extension.setup>` to setup the
+        console and are thus console specific.
+        """
+        assert isinstance(shell_setup, bool) or callable(shell_setup)
+        target = self.target
+        if console == None:
+            if 'preferred' not in self.console_list:
+                # nothing? well, this means keep as default whatever is
+                # the default now
+                return
+            # get the name of the preferred console
+            parameters = target.console.setup_get('preferred')
+            console = parameters['real_name']
+        if console == None:
+            # nothing? well, this means keep as default whatever is
+            # the default now
+            return
+        else:
+            assert console in target.console.console_list, \
+                "%s: unknown console (valid: %s)" \
+                % (console, " ".join(target.console.console_list))
+        target.console.setup(console, **console_setup_kwargs)
+        target.console.enable(console)
+        target.console.default = console
+
+        # same as target.shell.up()
+        if shell_setup == True:    	# passed as a parameter
+            target.shell.setup()
+        elif callable(shell_setup):
+            shell_setup()
+        # False, so we don't call shell setup
 
 
     def enable(self, console = None):
