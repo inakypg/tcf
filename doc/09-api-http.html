@@ -1,0 +1,486 @@
+
+
+<!DOCTYPE html>
+<!--[if IE 8]><html class="no-js lt-ie9" lang="en" > <![endif]-->
+<!--[if gt IE 8]><!--> <html class="no-js" lang="en" > <!--<![endif]-->
+<head>
+  <meta charset="utf-8">
+  
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  
+  <title>Basic target interface &mdash; Test Case Framework 0.11 documentation</title>
+  
+
+  
+  
+  
+  
+
+  
+
+  
+  
+    
+
+  
+
+  <link rel="stylesheet" href="../_static/css/theme.css" type="text/css" />
+  <link rel="stylesheet" href="../_static/pygments.css" type="text/css" />
+    <link rel="index" title="Index" href="../genindex.html" />
+    <link rel="search" title="Search" href="../search.html" /> 
+
+  
+  <script src="../_static/js/modernizr.min.js"></script>
+
+</head>
+
+<body class="wy-body-for-nav">
+
+   
+  <div class="wy-grid-for-nav">
+
+    
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search">
+          
+
+          
+            <a href="../index.html" class="icon icon-home"> Test Case Framework
+          
+
+          
+          </a>
+
+          
+            
+            
+              <div class="version">
+                0.11
+              </div>
+            
+          
+
+          
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+
+          
+        </div>
+
+        <div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="main navigation">
+          
+            
+            
+              
+            
+            
+              <ul>
+<li class="toctree-l1"><a class="reference internal" href="../02-QUICKSTART.html">1. Quickstart</a></li>
+<li class="toctree-l1"><a class="reference internal" href="02-guides.html">2. Guides</a></li>
+<li class="toctree-l1"><a class="reference internal" href="03-server-setup.html">3. Server deployment guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="04-HOWTOs.html">4. Examples and HOWTOs</a></li>
+<li class="toctree-l1"><a class="reference internal" href="05-RFAQs.html">5. Rationales and Frequently Asked Questions</a></li>
+<li class="toctree-l1"><a class="reference internal" href="06-troubleshooting.html">6. Support &amp; Troubleshooting</a></li>
+<li class="toctree-l1"><a class="reference internal" href="07-Architecture.html">7. Architecture</a></li>
+<li class="toctree-l1"><a class="reference internal" href="09-api.html">8. APIs</a></li>
+<li class="toctree-l1"><a class="reference internal" href="glossary.html">9. Glossary</a></li>
+<li class="toctree-l1"><a class="reference internal" href="10-Status.html">10. Current status and plans</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../01-CHANGELOG.html">11. TCF release v0.11</a></li>
+</ul>
+
+            
+          
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap">
+
+      
+      <nav class="wy-nav-top" aria-label="top navigation">
+        
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="../index.html">Test Case Framework</a>
+        
+      </nav>
+
+
+      <div class="wy-nav-content">
+        
+        <div class="rst-content">
+        
+          
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<div role="navigation" aria-label="breadcrumbs navigation">
+
+  <ul class="wy-breadcrumbs">
+    
+      <li><a href="../index.html">Docs</a> &raquo;</li>
+        
+      <li>Basic target interface</li>
+    
+    
+      <li class="wy-breadcrumbs-aside">
+        
+            
+            <a href="../_sources/doc/09-api-http.rst.txt" rel="nofollow"> View page source</a>
+          
+        
+      </li>
+    
+  </ul>
+
+  
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+            
+  <p id="ttbd-api-http">The HTTP API exported by <em>ttbd</em> is a very basic REST model which is
+goint to at some point be coverted to <em>odata</em> or JSON-RPC.</p>
+<p>FIXME: this document is work in progress</p>
+<p>It is recommended to access the server using the Python API as defined
+in <a class="reference internal" href="09-api.html#tcfl.tc.target_c" title="tcfl.tc.target_c"><code class="xref py py-class docutils literal notranslate"><span class="pre">tcfl.tc.target_c</span></code></a>.</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="kn">import</span> <span class="nn">tcfl</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">target</span> <span class="o">=</span> <span class="n">tcfl</span><span class="o">.</span><span class="n">target_c</span><span class="o">.</span><span class="n">create_from_cmdline_args</span><span class="p">(</span><span class="kc">None</span><span class="p">,</span> <span class="s2">&quot;TARGETNAME&quot;</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">target</span><span class="o">.</span><span class="n">power</span><span class="o">.</span><span class="n">off</span><span class="p">()</span>
+</pre></div>
+</div>
+<p>If raw HTTP access is needed, it is a good way to double check if
+things are being done right to run the <em>tcf</em> client with <em>–debug</em>,
+since it will print the HTTP requests done, to cross check:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span>$ tcf --debug login USERNAME
+...
+I ttb_client.rest_login():679: https://localhost:5004: checking for a valid session
+Login to https://localhost:5004 as USERNAME
+Password:
+D ttb_client.send_request():275: send_request: PUT https://localhost:5004/ttb-v1/login
+D connectionpool._new_conn():813: Starting new HTTPS connection (1): localhost:5004
+send: &#39;PUT /ttb-v1/login HTTP/1.1\r\n
+Host: localhost:5004\r\n
+Connection: keep-alive\r\n
+Accept-Encoding: gzip, deflate\r\n
+Accept: */*\r\n
+User-Agent: python-requests/2.20.0\r\n
+Cookie: remember_token=USERNAME|e72e83d4ae70d6ef484da8cec6fa1c4d93833327dabda9566bb12091038cfbe982f7ec3b1d269ae6316969489e546bf797ce564c8daef89f13451505ae5b5a37; session=.eJxNj0-LgzAUxL_K8s5S2rRehL0sacVDXlAs8nKRbutu_inFKhJLv_tmb70NMwzzmye0P2P30JBN49wl0JobZE_4-IYMJD-maK8rNuUO-ZfHWkRNQXJvlC13ZB1Dro2sBRNWOcULJnmR4uqYaJSWuQiqLw9oK68sMVmfvGwo9mgvetqiPe5VUy6KUxB5pZHREvcWsVZG9UVKVsdN70TkEA0dMD9vY6ZlTYvkkcueF-xPTtW_n_BKwNy6YTJT2FzmSbdTuHeQDbP3b8n_OzDDxQVIYH50Y_vmvP4Ax1dagQ.ENlzCw.jIg8VhRQADhEZiyNtCh2A6HRFsk\r\n
+Content-Length: 60\r\n
+Content-Type: application/x-www-form-urlencoded\r\n
+\r\n
+password=PASSWORD&amp;email=USERNAME&#39;
+reply: &#39;HTTP/1.1 200 OK\r\n&#39;
+header: Vary: Cookie
+header: Set-Cookie: remember_token=&quot;USERNAME|1efa96aafcf99f21c105d8323d161d205fa8bd1e7aa2ed3fcab38daba7f0c748280941d478ed4e3fc9b4e5f6606d35abad1e23666ee56b55be6adb560f8748e9&quot;; Expires=Fri, 20-Dec-2019 21:03:40 GMT; Path=/
+header: Set-Cookie: session=.eJyNjz1rwzAYhP9KeefUJEq8GAqlKDEeJGHjYKTFOIkafdkJjoyRQ_571a1jt4Pnjrt7Qvs9yoeCzI-TXEGrL5A94e0EGTC8T6k5L7QpNxR_OVqTqHlg2Glhyg03FlGsNKsJIkZYgQvEcJHSxSLSCMVyEkRf7qipnDAcsfrgWMNjjm9Jz9fU7LeiKWeBeSB5pSjic-ybyVJp0RcpNyp2OkviDtLwHc2P68gUq_nMcNxljjPtD1bU1w94rUBf5OC1D0k3edX6cJeQDZNzf8jvO9BDZ0Nyl6Nc3q-3YemcXD714KVLzrceVjA95Nj-x_r6AYOEbek.ENmCrA.JjU3Fqwtw2jvYjbJCJCKYMyR1Gs; HttpOnly; Path=/
+header: Content-Length: 92
+header: Content-Type: application/json
+header: Server: TornadoServer/5.0.2
+...
+</pre></div>
+</div>
+<p>Arguments are encoded as HTTP form fields; for non escalar arguments,
+the values are JSON encoded.</p>
+<p>Authentication is done via cookies, which also include the username,
+stored in <code class="docutils literal notranslate"><span class="pre">~/.tcf/cookies-SERVERNAME.pickle</span></code>, which can be loaded in
+python with:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="kn">import</span> <span class="nn">cPickle</span><span class="o">,</span> <span class="nn">requests</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">cookie</span> <span class="o">=</span> <span class="n">cPickle</span><span class="o">.</span><span class="n">load</span><span class="p">(</span><span class="nb">open</span><span class="p">(</span><span class="s2">&quot;/home/USER/.tcf/cookies-httpsservername000.pickle&quot;</span><span class="p">))</span>
+</pre></div>
+</div>
+<p>and then this can be used to make a request to, for example, the
+console interface:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="n">r</span> <span class="o">=</span> <span class="n">requests</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;https://servername:5000/ttb-v1/targets/r14s40/console/read&quot;</span><span class="p">,</span>
+<span class="gp">&gt;&gt;&gt; </span>                 <span class="n">verify</span> <span class="o">=</span> <span class="kc">False</span><span class="p">,</span> <span class="n">data</span> <span class="o">=</span> <span class="nb">dict</span><span class="p">(</span><span class="n">offset</span> <span class="o">=</span> <span class="mi">20</span><span class="p">,</span> <span class="n">component</span> <span class="o">=</span> <span class="s2">&quot;sol0_ssh&quot;</span><span class="p">),</span>
+<span class="gp">&gt;&gt;&gt; </span>                 <span class="n">cookies</span> <span class="o">=</span> <span class="n">cookie</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">r</span><span class="o">.</span><span class="n">text</span>
+</pre></div>
+</div>
+<div class="section" id="basic-target-interface">
+<h1>Basic target interface<a class="headerlink" href="#basic-target-interface" title="Permalink to this headline">¶</a></h1>
+<p>Common arguments:</p>
+<ul>
+<li><p class="first"><code class="docutils literal notranslate"><span class="pre">ticket</span></code>: ticket under which the current owner is holding the
+target; this is string unique identifier, same as used to aquire:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span>$ tcf login username
+$ tcf -t BLAHBLAH acquire TARGETNAME
+</pre></div>
+</div>
+<p>means <em>TARGETNAME</em> is now acquired by <em>username:BLAHBLAH</em> since the
+ticket is <em>BLAHBLAH</em>.</p>
+</li>
+<li><p class="first"><code class="docutils literal notranslate"><span class="pre">component</span></code>: for interfaces that understand multiple
+implementations or multiplex to multiple components (eg: <em>power</em>,
+<em>console</em>, <em>images</em>) this is a string that indicates to which
+instance to direct the request.</p>
+</li>
+</ul>
+<div class="admonition warning">
+<p class="first admonition-title">Warning</p>
+<p class="last">FIXME: this document is work in progress, to get more info for the
+time being, <code class="docutils literal notranslate"><span class="pre">tcf.git/ttbd</span></code> unpacks most of these calls (as per
+the <code class="docutils literal notranslate"><span class="pre">&#64;app.route</span></code> decorator); needed arguments can be extracted by
+look at what is obtained with <em>flask.request.form.get()</em></p>
+</div>
+<p>Endpoints:</p>
+<ul class="simple">
+<li><code class="docutils literal notranslate"><span class="pre">/ttb/v1/login</span></code> <em>PUT</em></li>
+<li><code class="docutils literal notranslate"><span class="pre">/ttb/v1/logout</span></code> <em>PUT</em></li>
+<li><code class="docutils literal notranslate"><span class="pre">/ttb/v1/validate_session</span></code> <em>GET</em></li>
+<li><code class="docutils literal notranslate"><span class="pre">/ttb/v1/targets</span></code> <em>GET</em></li>
+<li><code class="docutils literal notranslate"><span class="pre">/ttb/v1/targets/TARGETNAME/</span></code> <em>GET</em></li>
+<li><code class="docutils literal notranslate"><span class="pre">/ttb/v1/targets/TARGETNAME/acquire</span></code> <em>PUT</em></li>
+<li><code class="docutils literal notranslate"><span class="pre">/ttb/v1/targets/TARGETNAME/active</span></code> <em>PUT</em></li>
+<li><code class="docutils literal notranslate"><span class="pre">/ttb/v1/targets/TARGETNAME/release</span></code> <em>PUT</em></li>
+<li><code class="docutils literal notranslate"><span class="pre">/ttb/v1/targets/TARGETNAME/enable</span></code> <em>PUT</em></li>
+<li><code class="docutils literal notranslate"><span class="pre">/ttb/v1/targets/TARGETNAME/disable</span></code> <em>PUT</em></li>
+<li><code class="docutils literal notranslate"><span class="pre">/ttb/v1/targets/TARGETNAME/property_set</span></code> <em>PUT</em></li>
+<li><code class="docutils literal notranslate"><span class="pre">/ttb/v1/targets/TARGETNAME/property_get</span></code> <em>GET</em></li>
+<li><code class="docutils literal notranslate"><span class="pre">/ttb/v1/targets/TARGETNAME/ip_tunnel</span></code> <em>POST</em></li>
+<li><code class="docutils literal notranslate"><span class="pre">/ttb/v1/targets/TARGETNAME/ip_tunnel</span></code> <em>DELETE</em></li>
+<li><code class="docutils literal notranslate"><span class="pre">/ttb/v1/targets/TARGETNAME/ip_tunnel</span></code> <em>GET</em></li>
+<li><code class="docutils literal notranslate"><span class="pre">/ttb/v1/files/FILENAME</span></code> <em>POST</em> upload a file to user’s storage</li>
+<li><code class="docutils literal notranslate"><span class="pre">/ttb/v1/files/FILENAME</span></code> <em>GET</em> download a file from the user’s
+storage</li>
+<li><code class="docutils literal notranslate"><span class="pre">/ttb/v1/files/FILENAME</span></code> <em>DELETE</em> delete a file from the user’s
+storage</li>
+<li><code class="docutils literal notranslate"><span class="pre">/ttb/v1/files</span></code> <em>GET</em> list files in the user’s storage</li>
+</ul>
+</div>
+<div class="section" id="general-interface-access">
+<h1>General interface access<a class="headerlink" href="#general-interface-access" title="Permalink to this headline">¶</a></h1>
+<p>Functionality to manipulate / access targets is implemented by
+separate unrelated and available at the endpoints
+<code class="docutils literal notranslate"><span class="pre">/ttb/v1/TARGETNAME/INTERFACENAME/METHODNAME</span></code> (with PUT, GET, POST,
+DELETE depending ont he operation).</p>
+<p>Note different targets might implement different interfaces, and thus
+not all of them are always avaialble. Interfaces supported by a target
+are available by listing the target’s metadata (with
+<code class="docutils literal notranslate"><span class="pre">/ttb/v1/targets[/TARGETNAME]</span></code>) and looking for the value of the
+<em>interfaces</em> field.</p>
+<div class="admonition warning">
+<p class="first admonition-title">Warning</p>
+<p class="last">FIXME: this document is work in progress, to get more info for the
+time being, <code class="docutils literal notranslate"><span class="pre">tcf.git/ttbd/ttbl/*.py</span></code> implements these interfaces
+by instantiating a <a class="reference internal" href="09-api.html#ttbl.tt_interface" title="ttbl.tt_interface"><code class="xref py py-class docutils literal notranslate"><span class="pre">ttbl.tt_interface</span></code></a> and implementing
+calls to <code class="docutils literal notranslate"><span class="pre">METHOD_NAME</span></code> where method is <em>put</em>, <em>post</em>, <em>get</em> or
+<em>delete</em>. The dictionary <em>args</em> passed is a dictionary with the
+arguments passed in the HTTP call.</p>
+</div>
+<div class="section" id="power">
+<h2>Power<a class="headerlink" href="#power" title="Permalink to this headline">¶</a></h2>
+<ul class="simple">
+<li><code class="docutils literal notranslate"><span class="pre">/ttb/v1/targets/TARGETNAME/power/off</span></code> <em>PUT</em></li>
+<li><code class="docutils literal notranslate"><span class="pre">/ttb/v1/targets/TARGETNAME/power/on</span></code> <em>PUT</em></li>
+<li><code class="docutils literal notranslate"><span class="pre">/ttb/v1/targets/TARGETNAME/power/cycle</span></code> <em>PUT</em></li>
+<li><code class="docutils literal notranslate"><span class="pre">/ttb/v1/targets/TARGETNAME/power/get</span></code> <em>GET</em></li>
+<li><code class="docutils literal notranslate"><span class="pre">/ttb/v1/targets/TARGETNAME/power/list</span></code> <em>GET</em></li>
+</ul>
+</div>
+<div class="section" id="console">
+<h2>Console<a class="headerlink" href="#console" title="Permalink to this headline">¶</a></h2>
+<ul class="simple">
+<li><code class="docutils literal notranslate"><span class="pre">/ttb/v1/targets/TARGETNAME/console/setup</span></code> <em>PUT</em></li>
+<li><code class="docutils literal notranslate"><span class="pre">/ttb/v1/targets/TARGETNAME/console/list</span></code> <em>GET</em></li>
+<li><code class="docutils literal notranslate"><span class="pre">/ttb/v1/targets/TARGETNAME/console/enable</span></code> <em>PUT</em></li>
+<li><code class="docutils literal notranslate"><span class="pre">/ttb/v1/targets/TARGETNAME/console/disable</span></code> <em>PUT</em></li>
+<li><code class="docutils literal notranslate"><span class="pre">/ttb/v1/targets/TARGETNAME/console/state</span></code> <em>GET</em></li>
+<li><code class="docutils literal notranslate"><span class="pre">/ttb/v1/targets/TARGETNAME/console/size</span></code> <em>GET</em></li>
+<li><code class="docutils literal notranslate"><span class="pre">/ttb/v1/targets/TARGETNAME/console/read</span></code> <em>GET</em></li>
+<li><code class="docutils literal notranslate"><span class="pre">/ttb/v1/targets/TARGETNAME/console/write</span></code> <em>PUT</em></li>
+</ul>
+</div>
+<div class="section" id="capture">
+<h2>Capture<a class="headerlink" href="#capture" title="Permalink to this headline">¶</a></h2>
+<ul class="simple">
+<li><code class="docutils literal notranslate"><span class="pre">/ttb/v1/targets/TARGETNAME/capture/start</span></code> <em>POST</em></li>
+<li><code class="docutils literal notranslate"><span class="pre">/ttb/v1/targets/TARGETNAME/capture/stop_and_get</span></code> <em>POST</em></li>
+<li><code class="docutils literal notranslate"><span class="pre">/ttb/v1/targets/TARGETNAME/capture/list</span></code> <em>GET</em></li>
+</ul>
+</div>
+<div class="section" id="buttons">
+<h2>Buttons<a class="headerlink" href="#buttons" title="Permalink to this headline">¶</a></h2>
+<ul class="simple">
+<li><code class="docutils literal notranslate"><span class="pre">/ttb/v1/targets/TARGETNAME/buttons/sequence</span></code> <em>PUT</em></li>
+<li><code class="docutils literal notranslate"><span class="pre">/ttb/v1/targets/TARGETNAME/buttons/list</span></code> <em>GET</em></li>
+</ul>
+</div>
+<div class="section" id="fastboot">
+<h2>Fastboot<a class="headerlink" href="#fastboot" title="Permalink to this headline">¶</a></h2>
+<ul class="simple">
+<li><code class="docutils literal notranslate"><span class="pre">/ttb/v1/targets/TARGETNAME/fastboot/run</span></code> <em>PUT</em></li>
+<li><code class="docutils literal notranslate"><span class="pre">/ttb/v1/targets/TARGETNAME/fastboot/list</span></code> <em>GET</em></li>
+</ul>
+</div>
+<div class="section" id="images">
+<h2>Images<a class="headerlink" href="#images" title="Permalink to this headline">¶</a></h2>
+<ul class="simple">
+<li><code class="docutils literal notranslate"><span class="pre">/ttb/v1/targets/TARGETNAME/images/flash</span></code> <em>PUT</em></li>
+<li><code class="docutils literal notranslate"><span class="pre">/ttb/v1/targets/TARGETNAME/images/list</span></code> <em>GET</em></li>
+</ul>
+</div>
+<div class="section" id="ioc-flash-server-app">
+<h2>IOC_flash_server_app<a class="headerlink" href="#ioc-flash-server-app" title="Permalink to this headline">¶</a></h2>
+<ul class="simple">
+<li><code class="docutils literal notranslate"><span class="pre">/ttb/v1/targets/TARGETNAME/ioc_flash_server_app/run</span></code> <em>GET</em></li>
+</ul>
+</div>
+<div class="section" id="things">
+<h2>Things<a class="headerlink" href="#things" title="Permalink to this headline">¶</a></h2>
+<ul class="simple">
+<li><code class="docutils literal notranslate"><span class="pre">/ttb/v1/targets/TARGETNAME/things/list</span></code> <em>GET</em></li>
+<li><code class="docutils literal notranslate"><span class="pre">/ttb/v1/targets/TARGETNAME/things/get</span></code> <em>GET</em></li>
+<li><code class="docutils literal notranslate"><span class="pre">/ttb/v1/targets/TARGETNAME/things/plug</span></code> <em>PUT</em></li>
+<li><code class="docutils literal notranslate"><span class="pre">/ttb/v1/targets/TARGETNAME/things/unplug</span></code> <em>PUT</em></li>
+</ul>
+</div>
+</div>
+<div class="section" id="examples">
+<h1>Examples<a class="headerlink" href="#examples" title="Permalink to this headline">¶</a></h1>
+<div class="section" id="example-listing-targets-over-http">
+<h2>Example: listing targets over HTTP<a class="headerlink" href="#example-listing-targets-over-http" title="Permalink to this headline">¶</a></h2>
+<p>What the command line tool would be:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span>$ tcf list -vv
+</pre></div>
+</div>
+<p>anything that has an &#64; sign is being used actively by TCF another -v
+will get you the same JSON that either of:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span>$ wget --no-check-certificate https://SERVERNAME:5000/ttb-v1/targets
+$ curl -k https://SERVERNAME:5000/ttb-v1/targets/
+</pre></div>
+</div>
+<p>will return; in JSON, you can tell a target is idle if <em>owner</em> is
+None or missing; if it has a value, it is the user ID of whoever has
+it:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="p">{</span>
+    <span class="o">...</span>
+    <span class="s1">&#39;id&#39;</span><span class="p">:</span> <span class="s1">&#39;r14s40&#39;</span><span class="p">,</span>
+    <span class="o">....</span>
+    <span class="s1">&#39;owner&#39;</span><span class="p">:</span> <span class="kc">None</span><span class="p">,</span>
+    <span class="o">...</span>
+<span class="p">}</span>
+</pre></div>
+</div>
+<p>now:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span>$ tcf login USERNAME
+Password: &lt;....&gt;
+$ tcf acquire r14s40
+$ tcf list -vvv r14s40
+{ ...
+  &#39;id&#39;: u&#39;r14s40&#39;,
+  ...
+  &#39;owner&#39;: u&#39;USERNAME&#39;,
+  ...
+}
+</pre></div>
+</div>
+<p>In Python:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="kn">import</span> <span class="nn">requests</span>
+<span class="n">r</span> <span class="o">=</span> <span class="n">requests</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;https://SERVERNAME:5000/ttb-v1/targets&quot;</span><span class="p">,</span> <span class="n">verify</span> <span class="o">=</span> <span class="kc">False</span><span class="p">)</span>
+<span class="n">r</span><span class="o">.</span><span class="n">json</span><span class="p">()</span>
+</pre></div>
+</div>
+</div>
+<div class="section" id="example-reading-the-console-s-from-http">
+<h2>Example: Reading the console(s) from HTTP<a class="headerlink" href="#example-reading-the-console-s-from-http" title="Permalink to this headline">¶</a></h2>
+<p>You can see which consoles are available with either or:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span>$ tcf acquire r14s40
+$ tcf console-list r14s40
+$ tcf list -vvv r14s40 | grep consoles
+</pre></div>
+</div>
+<p>You can continuously read with:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span>$ tcf console-read --follow r14s40
+</pre></div>
+</div>
+<p>in Python, HTTP I do like:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="kn">import</span> <span class="nn">cPickle</span><span class="o">,</span> <span class="nn">requests</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">cookie</span> <span class="o">=</span> <span class="n">cPickle</span><span class="o">.</span><span class="n">load</span><span class="p">(</span><span class="nb">open</span><span class="p">(</span><span class="s2">&quot;/home/user/.tcf/cookies-httpsSERVERNAME5000.pickle&quot;</span><span class="p">))</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">r</span> <span class="o">=</span> <span class="n">requests</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;https://SERVERNAME:5000/ttb-v1/targets/r14s40/console/read&quot;</span><span class="p">,</span>
+<span class="gp">... </span>    <span class="n">verify</span> <span class="o">=</span> <span class="kc">False</span><span class="p">,</span> <span class="n">data</span> <span class="o">=</span> <span class="nb">dict</span><span class="p">(</span><span class="n">offset</span> <span class="o">=</span> <span class="mi">20</span><span class="p">,</span> <span class="n">component</span> <span class="o">=</span> <span class="s2">&quot;sol0_ssh&quot;</span><span class="p">),</span> <span class="n">cookies</span> <span class="o">=</span> <span class="n">cookie</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">r</span><span class="o">.</span><span class="n">text</span>
+</pre></div>
+</div>
+<p>So you put this in a loop, which is what <em>tcf console-read –follow</em>
+does in (<code class="docutils literal notranslate"><span class="pre">tcf.git/tcfl/target_ext_console.py:_cmdline_console_read</span></code>)</p>
+</div>
+</div>
+
+
+           </div>
+           
+          </div>
+          <footer>
+  
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>
+        &copy; Copyright 2015, Author
+
+    </p>
+  </div>
+  Built with <a href="http://sphinx-doc.org/">Sphinx</a> using a <a href="https://github.com/rtfd/sphinx_rtd_theme">theme</a> provided by <a href="https://readthedocs.org">Read the Docs</a>. 
+
+</footer>
+
+        </div>
+      </div>
+
+    </section>
+
+  </div>
+  
+
+
+  
+
+    
+    
+      <script type="text/javascript">
+          var DOCUMENTATION_OPTIONS = {
+              URL_ROOT:'../',
+              VERSION:'0.11',
+              LANGUAGE:'None',
+              COLLAPSE_INDEX:false,
+              FILE_SUFFIX:'.html',
+              HAS_SOURCE:  true,
+              SOURCELINK_SUFFIX: '.txt'
+          };
+      </script>
+        <script type="text/javascript" src="../_static/jquery.js"></script>
+        <script type="text/javascript" src="../_static/underscore.js"></script>
+        <script type="text/javascript" src="../_static/doctools.js"></script>
+    
+
+  
+
+  <script type="text/javascript" src="../_static/js/theme.js"></script>
+
+  <script type="text/javascript">
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>
